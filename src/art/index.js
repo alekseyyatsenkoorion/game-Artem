@@ -1,7 +1,11 @@
 // Список картинок зоны «Контент»: «id → {w, h, draw}». Ядро рисует каждую один раз.
-import { art as samosval } from './machines/samosval.js';
+import { machines } from './machines/index.js';
+import { art as puzzles } from './puzzles/index.js';
 import { art as backgrounds } from './backgrounds.js';
 
-export const art = Object.assign({}, samosval, backgrounds);
+const machineArt = {};
+for (const id of Object.keys(machines)) Object.assign(machineArt, machines[id].art);
+
+export const art = Object.assign({}, machineArt, puzzles, backgrounds);
 
 export default art;

@@ -1,9 +1,10 @@
-// Сборка машины (spec.md, раздел 4 «Сборка машины»). Заготовка этапа 1; на этапе 2 переходит зоне «Мини-игры».
+// Сборка машины (spec.md, раздел 4 «Сборка машины»): любая из 10 машин, 5–10 деталей, машина до 620×390.
 // Ребёнок перетаскивает детали на контур; рядом с местом деталь прилипает, на чужое место не встаёт.
 import { Scene } from '../core/scene.js';
 import { IdleHint, drawHand, drawGlowRect } from '../core/ui.js';
 import { dist, easeOut, lerp, shuffle, logError } from '../core/draw-utils.js';
 import contentData from '../data/index.js';
+import { validMachine } from './common.js';
 
 export const SNAP_DISTANCE = 90;       // центр детали ближе к центру своего места — встаёт
 const MIN_TOUCH = 100;                 // зона касания не меньше ~2 см
@@ -15,10 +16,13 @@ const DRIVE_START = 1.4;
 const MAX_FINISH_WAIT = 6;             // не ждём голос дольше
 
 // Раскладка деталей на верстаке: высокие детали первыми, каждая в первый ряд, где есть место;
-// внутри ряда порядок случайный. Если места не хватает — детали уменьшаются.
-export function layoutTray(parts, random) {
+// порядок рядов и деталей в ряду случайный. Если места не хватает — детали уменьшаются.
+// Детали не накладываются и не вылезают за экран. slotOf(part) → {cx, cy} — место детали на машине:
+// из нескольких случайных раскладок берётся та, где ни одна деталь не лежит у своего места.
+export function layoutTray(parts, random, slotOf) {
   const byHeight = parts.slice().sort((a, b) => b.h - a.h || b.w - a.w);
-  for (let s = 1; s >= 0.5; s -= 0.05) {
+  for (let step = 0; step <= 14; step++) {
+    const s = 1 - step * 0.05;
     const rows = [];
     for (const p of byHeight) {
       const w = p.w * s;
@@ -28,20 +32,29 @@ export function layoutTray(parts, random) {
       row.w += GAP + w;
       row.h = Math.max(row.h, p.h * s);
     }
-    const total = rows.reduce((a, r) => a + r.h, 0) + GAP * (rows.length - 1);
-    if (total <= TRAY.h || s <= 0.5) {
-      const out = {};
-      let y = TRAY.y + (TRAY.h - total) / 2;
-      for (const r of shuffle(rows, random)) {
-        let x = TRAY.x + (TRAY.w - r.w) / 2;
-        for (const p of shuffle(r.items, random)) {
-          const w = p.w * s;
-          out[p.id] = { cx: x + w / 2, cy: y + r.h / 2, s };
-          x += w + GAP;
+    const gapY = rows.length > 1 ? Math.min(GAP, (TRAY.h - rows.reduce((a, r) => a + r.h, 0)) / (rows.length - 1)) : 0;
+    const total = rows.reduce((a, r) => a + r.h, 0) + gapY * (rows.length - 1);
+    if ((total <= TRAY.h && (rows.length === 1 || gapY >= 4)) || step === 14) {
+      let best = null, bestScore = -Infinity;
+      for (let attempt = 0; attempt < 30; attempt++) {
+        const out = {};
+        let y = TRAY.y + (TRAY.h - total) / 2;
+        for (const r of shuffle(rows, random)) {
+          let x = TRAY.x + (TRAY.w - r.w) / 2;
+          for (const p of shuffle(r.items, random)) {
+            const w = p.w * s;
+            out[p.id] = { cx: x + w / 2, cy: y + r.h / 2, s };
+            x += w + GAP;
+          }
+          y += r.h + gapY;
         }
-        y += r.h + GAP;
+        if (!slotOf) return out;
+        let score = Infinity;
+        for (const p of parts) { const sl = slotOf(p); score = Math.min(score, dist(out[p.id].cx, out[p.id].cy, sl.cx, sl.cy)); }
+        if (score > bestScore) { best = out; bestScore = score; }
+        if (score > SNAP_DISTANCE * 1.5) break;
       }
-      return out;
+      return best;
     }
   }
   return {};
@@ -59,16 +72,13 @@ export class AssemblyScene extends Scene {
 
   enter(params) {
     const ctx = this.ctx;
-    const m = ctx.data.machines.find((x) => x.id === params.machine);
-    if (!m || !Array.isArray(m.parts) || !m.parts.length || !m.size) {
-      logError('Assembly', 'нет описания машины', params.machine);
-      this.broken = true;
-      return;
-    }
+    this.parts = [];
+    const m = validMachine(ctx, params.machine, 'Assembly');
+    if (!m) { this.broken = true; return; }
     this.machine = m;
     this.ox = Math.round((ctx.screen.width - m.size.w) / 2);
     this.oy = ORIGIN_Y;
-    const tray = layoutTray(m.parts, ctx.random);
+    const tray = layoutTray(m.parts, ctx.random, (def) => ({ cx: this.ox + def.x + def.w / 2, cy: this.oy + def.y + def.h / 2 }));
     this.parts = m.parts.map((def) => {
       const home = tray[def.id] || { cx: 512, cy: 640, s: 0.6 };
       return {
@@ -89,7 +99,7 @@ export class AssemblyScene extends Scene {
     this.finished = false;
     this.hint = new IdleHint();
     this.engine = null;
-    const acc = ctx.data.phrases[m.nameAccPhrase] || '';
+    const acc = (ctx.data.phrases && ctx.data.phrases[m.nameAccPhrase]) || '';
     ctx.audio.say('assembly-task', { machine: acc });
   }
 
