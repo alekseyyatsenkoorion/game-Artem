@@ -1,0 +1,81 @@
+// Service worker: при первом открытии сохраняет на планшете все файлы игры; дальше игра работает без сети.
+// Новая версия скачивается в фоне целиком и включается при следующем запуске.
+// Блок между метками заполняет tools/build.mjs при выкладке — руками не правится.
+// BUILD:START
+const VERSION = "1.0";
+const FILES = [
+  "assets/gpt/manifest.json",
+  "icon-180.png",
+  "icon-192.png",
+  "icon-512.png",
+  "index.html",
+  "manifest.webmanifest",
+  "src/art/backgrounds.js",
+  "src/art/index.js",
+  "src/art/machines/samosval.js",
+  "src/core/assets.js",
+  "src/core/audio.js",
+  "src/core/draw-utils.js",
+  "src/core/game.js",
+  "src/core/input.js",
+  "src/core/parent-timer.js",
+  "src/core/progress.js",
+  "src/core/scene-manager.js",
+  "src/core/scene.js",
+  "src/core/ui.js",
+  "src/core/updater.js",
+  "src/core/version.js",
+  "src/data/facts.js",
+  "src/data/index.js",
+  "src/data/machines/samosval.js",
+  "src/data/phrases.js",
+  "src/data/praises.js",
+  "src/games/assembly.js",
+  "src/games/index.js",
+  "src/main.js",
+  "src/world/home.js",
+  "src/world/index.js",
+  "src/world/locked.js",
+  "src/world/parent.js"
+];
+// BUILD:END
+
+const CACHE = 'stroika-' + VERSION;
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE).then((cache) =>
+      cache.addAll(['./'].concat(FILES).map((f) => new Request(f, { cache: 'reload' })))
+    )
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    caches.keys()
+      .then((keys) => Promise.all(keys.filter((k) => k.startsWith('stroika-') && k !== CACHE).map((k) => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'skip-waiting') self.skipWaiting();
+});
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return;
+  event.respondWith(
+    caches.open(CACHE).then((cache) =>
+      cache.match(req, { ignoreSearch: true }).then((hit) => {
+        if (hit) return hit;
+        if (req.mode === 'navigate') {
+          return cache.match('./index.html').then((page) => page || fetch(req));
+        }
+        return fetch(req);
+      })
+    )
+  );
+});

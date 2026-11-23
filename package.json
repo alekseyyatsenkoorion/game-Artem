@@ -1,0 +1,11 @@
+{
+  "name": "game-artem",
+  "private": true,
+  "type": "module",
+  "description": "Игра «Стройка». Файл нужен только для тестов; в игру не попадает.",
+  "scripts": {
+    "test": "node --test \"tests/core/*.test.js\" \"tests/games/*.test.js\" \"tests/content/*.test.js\" \"tests/world/*.test.js\"",
+    "e2e": "node tests/e2e/run.mjs",
+    "build": "node tools/build.mjs"
+  }
+}

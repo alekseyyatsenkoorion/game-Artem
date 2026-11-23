@@ -1,0 +1,8 @@
+node_modules/
+test-results/
+# Планы проекта лежат только на компьютере (в них личные подробности)
+spec.md
+contracts.md
+tests.md
+prompt GPT.md
+CLAUDE.md
