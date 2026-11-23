@@ -212,6 +212,8 @@ const MACHINES_E2E = await (async () => {
 {
   const { page, cdp, context } = await newPage();
   await ready(page);
+  // Прогон группы 3 идёт дольше 30 минут игры: родительский таймер выключаем, его проверяет 3.10 отдельно.
+  await page.evaluate(() => window.__stroika.timer.setMinutes(0));
 
   await check('3.1', 'Главный экран: три входа; гараж открывается, карта и канат пока закрыты (этап 3)', async () => {
     await shot(page, '01-glavnyi-ekran');
