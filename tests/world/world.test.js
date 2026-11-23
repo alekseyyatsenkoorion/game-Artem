@@ -553,3 +553,25 @@ test('2.33 таймер: задание доигрывается, блокиро
   frames(w, 0.1);
   assert.equal(w.scenes.current(), 'home');
 });
+
+test('5.3 гараж: неподвижный ряд запечён в одну картинку — за кадр рисуется лишь несколько картинок', async () => {
+  const w = await world();
+  w.progress.unlockAll();
+  for (const id of IDS) w.progress.setAssembled(id);
+  const s = await garage(w);
+  frames(w, 2);
+  const g = fakeGraphics();
+  s.draw(g);
+  const imgs = g.calls.filter((c) => c.op === 'drawImage');
+  assert.ok(imgs.length <= 2, 'картинок за кадр: ' + imgs.length);
+  assert.ok(w.assets.cache.has('garage/layer'));
+  const key = s.layerKey;
+  s.draw(fakeGraphics());
+  assert.equal(s.layerKey, key); // без изменений слой не перерисовывается
+  w.progress.reset();
+  frames(w, 0.1);
+  s.draw(fakeGraphics());
+  assert.notEqual(s.layerKey, key); // прогресс изменился — слой перерисован
+  w.scenes.back();
+  assert.equal(w.assets.cache.has('garage/layer'), false); // освобождён при выходе
+});

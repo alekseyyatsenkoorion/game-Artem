@@ -27,6 +27,9 @@ const ROW_H = 250, ROW_GAP = 24;
 const TOP = 120;
 const FLOOR_PAD = 34; // от низа места до «пола», на котором стоит машина
 const PILE_PARTS = 3;
+const LAYER_ID = 'garage/layer'; // запечённый неподвижный ряд
+const ICONS_POP = 0.6;
+const DIM = 0.75; // затемнение ряда под крупной машиной
 
 const ZOOM_TIME = 0.5;
 const UNZOOM_TIME = 0.35;
@@ -86,6 +89,8 @@ export class GarageScene extends Scene {
   exit() {
     if (this.unsubscribe) { try { this.unsubscribe(); } catch (e) { /* ничего */ } }
     this.unsubscribe = null;
+    this.ctx.assets.release([LAYER_ID]);
+    this.layerKey = null;
   }
 
   // ---------- состояние ----------
@@ -301,24 +306,66 @@ export class GarageScene extends Scene {
 
   // ---------- рисование ----------
 
+  // Неподвижный ряд (фон, боксы, стоящие машины) «запекается» в одну картинку и перерисовывается
+  // только при изменении состояния: 10 крупных картинок, уменьшаемых каждый кадр, не тянут
+  // старый iPad (тест 5.3). Анимированное (покачивание, приезд, подсветка) рисуется поверх.
+  _animating(id) {
+    return id === this.selected || !!this.shake[id] || this.arrivals[id] !== undefined;
+  }
+
+  _layer() {
+    const dim = this.mode === 'big';
+    const withIcons = dim && this.iconsBaked();
+    const key = this.slots.map((s) => s.machine + ':' + s.state + (this._animating(s.machine) ? '*' : '')).join('|') + (dim ? '|dim' : '')
+      + (withIcons ? '|' + this.selected + ':' + this.icons.map((i) => i.icon + (i.locked ? 'L' : '')).join(',') : '');
+    if (key !== this.layerKey) {
+      const a = this.ctx.assets;
+      const still = this.slots.filter((s) => !this._animating(s.machine));
+      a.release([LAYER_ID]);
+      a.register({ [LAYER_ID]: { w: 1024, h: 768, draw: (g) => {
+        g.drawImage(a.image('bg/garage'), 0, 0, 1024, 768);
+        for (const s of this.slots) this._drawSlotBase(g, s);
+        for (const s of still) this._drawSlotMachine(g, s, 0);
+        // под крупной машиной ряд затемнён — тоже один раз, а не каждый кадр
+        if (dim) { g.fillStyle = 'rgba(20,30,45,' + DIM + ')'; g.fillRect(0, 0, 1024, 768); }
+        if (withIcons) { this._drawPodium(g, 1); this._drawIcons(g, true); }
+      } } });
+      this.layerKey = key;
+    }
+    return this.ctx.assets.image(LAYER_ID);
+  }
+
   draw(g) {
     const a = this.ctx.assets;
-    g.drawImage(a.image('bg/garage'), 0, 0, 1024, 768);
+    g.drawImage(this._layer(), 0, 0, 1024, 768);
     const wait = this.waiting();
-    for (const s of this.slots) this._drawSlot(g, s, s.machine === wait);
+    if (wait && this.mode === 'row') {
+      const r = this._slot(wait).rect;
+      drawGlowRect(g, r.x + r.w / 2, r.y + r.h / 2 - 6, r.w - 34, r.h - 40, this.t);
+    }
+    for (const s of this.slots) {
+      if (s.machine === this.selected || !this._animating(s.machine)) continue;
+      let dx = 0;
+      if (this.shake[s.machine]) dx = Math.sin(this.shake[s.machine] * 40) * 6;
+      if (this.arrivals[s.machine] !== undefined) {
+        const mr = this._slotMachineRect(s);
+        dx = (1 - easeOut(this.arrivals[s.machine] / ARRIVE_TIME)) * (1100 - mr.x);
+      }
+      this._drawSlotMachine(g, s, dx);
+    }
 
     if (this.selected) {
       const k = this.mode === 'zoom' ? easeOut(this.modeT / ZOOM_TIME)
         : this.mode === 'unzoom' ? 1 - this.modeT / UNZOOM_TIME : 1;
-      g.fillStyle = 'rgba(20,30,45,' + (0.75 * Math.max(0, k)).toFixed(3) + ')';
-      g.fillRect(0, 0, 1024, 768);
+      if (this.mode !== 'big') {
+        g.fillStyle = 'rgba(20,30,45,' + (DIM * Math.max(0, k)).toFixed(3) + ')';
+        g.fillRect(0, 0, 1024, 768);
+      }
       const r = this.selectedRect();
-      // подиум
-      g.fillStyle = 'rgba(255,255,255,' + (0.25 * k).toFixed(3) + ')';
-      g.beginPath(); g.ellipse(r.x + r.w / 2, r.y + r.h + 4, r.w / 2 + 30, 26 * k + 6, 0, 0, Math.PI * 2); g.fill();
+      if (!this.iconsBaked()) this._drawPodium(g, k);
       const dy = this.bounce > 0 ? -Math.abs(Math.sin(this.bounce * 18)) * 14 : Math.sin(this.t * 2) * 2 * k;
-      g.drawImage(a.image('machine/' + this.selected + '/whole/idle'), r.x, r.y + dy, r.w, r.h);
-      if (this.mode === 'big') this._drawIcons(g);
+      g.drawImage(a.image('machine/' + this.selected + '/whole/idle'), Math.round(r.x), Math.round(r.y + dy), Math.round(r.w), Math.round(r.h));
+      if (this.mode === 'big' && !this.iconsBaked()) this._drawIcons(g, false);
     }
 
     if (this.hint.showHand()) {
@@ -333,10 +380,8 @@ export class GarageScene extends Scene {
     }
   }
 
-  _drawSlot(g, s, waiting) {
-    const a = this.ctx.assets;
+  _drawSlotBase(g, s) {
     const r = s.rect;
-    const m = this._machine(s.machine);
     const floor = r.y + r.h - FLOOR_PAD;
     // бокс гаража: тёмная ниша, над ней поднятые ворота, внизу пол с жёлтой разметкой
     g.fillStyle = 'rgba(40,48,62,0.30)';
@@ -351,27 +396,23 @@ export class GarageScene extends Scene {
     g.fillStyle = '#ffd34d';
     g.fillRect(r.x + 4, floor - 8, 6, FLOOR_PAD);
     g.fillRect(r.x + r.w - 10, floor - 8, 6, FLOOR_PAD);
-    if (s.machine === this.selected) return; // машина выехала в центр
+  }
 
-    let mr = this._slotMachineRect(s);
-    let dx = 0;
-    if (this.shake[s.machine]) dx = Math.sin(this.shake[s.machine] * 40) * 6;
-    if (this.arrivals[s.machine] !== undefined) {
-      const k = easeOut(this.arrivals[s.machine] / ARRIVE_TIME);
-      dx = (1 - k) * (1100 - mr.x);
-    }
-    mr = { x: mr.x + dx, y: mr.y, w: mr.w, h: mr.h };
+  _drawSlotMachine(g, s, dx) {
+    const a = this.ctx.assets;
+    const m = this._machine(s.machine);
+    const floor = s.rect.y + s.rect.h - FLOOR_PAD;
+    const r0 = this._slotMachineRect(s);
+    const mr = { x: r0.x + dx, y: r0.y, w: r0.w, h: r0.h };
     // тень
     g.fillStyle = 'rgba(0,0,0,0.2)';
     g.beginPath(); g.ellipse(mr.x + mr.w / 2, floor + 2, mr.w / 2, 8, 0, 0, Math.PI * 2); g.fill();
-
     if (s.state === 'locked') {
       g.save();
       g.globalAlpha = 0.55;
       g.drawImage(a.image('machine/' + m.id + '/whole/silhouette'), mr.x, mr.y, mr.w, mr.h);
       g.restore();
     } else if (s.state === 'parts') {
-      if (waiting && this.mode === 'row') drawGlowRect(g, r.x + r.w / 2, r.y + r.h / 2 - 6, r.w - 34, r.h - 40, this.t);
       // контур будущей машины и кучка деталей перед ним
       g.save();
       g.globalAlpha = 0.28;
@@ -379,8 +420,7 @@ export class GarageScene extends Scene {
       g.restore();
       this._drawPile(g, m, mr.x + mr.w / 2, floor);
     } else {
-      const bob = Math.sin(this.t * 2 + r.x) * 1.5;
-      g.drawImage(a.image('machine/' + m.id + '/whole/idle'), mr.x, mr.y + bob, mr.w, mr.h);
+      g.drawImage(a.image('machine/' + m.id + '/whole/idle'), mr.x, mr.y, mr.w, mr.h);
     }
   }
 
@@ -396,11 +436,20 @@ export class GarageScene extends Scene {
     });
   }
 
-  _drawIcons(g) {
+  // Значки «выскакивают» первые полсекунды, потом вместе с подиумом запекаются в слой.
+  iconsBaked() { return this.mode === 'big' && this.modeT >= ICONS_POP; }
+
+  _drawPodium(g, k) {
+    const r = this.selectedRect();
+    g.fillStyle = 'rgba(255,255,255,' + (0.25 * k).toFixed(3) + ')';
+    g.beginPath(); g.ellipse(r.x + r.w / 2, r.y + r.h + 4, r.w / 2 + 30, 26 * k + 6, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  _drawIcons(g, still) {
     const a = this.ctx.assets;
     this.icons.forEach((ic, i) => {
       const r = ic.rect;
-      const pop = Math.min(1, this.modeT * 4 - i * 0.15);
+      const pop = still ? 1 : Math.min(1, this.modeT * 4 - i * 0.15);
       if (pop <= 0) return;
       const s = 0.6 + 0.4 * easeOut(pop);
       const w = r.w * s, h = r.h * s;
