@@ -126,3 +126,16 @@ test('подписка on(change) и отписка', () => {
   p.unlock('buldozer');
   assert.equal(n, 1);
 });
+
+test('0.12 мойка: wash() / saveWash() читают и пишут поле wash формата', () => {
+  const st = memoryStorage();
+  const p = make(st);
+  assert.deepEqual(p.wash(), { lastWasStubborn: false });
+  p.saveWash({ lastWasStubborn: true });
+  assert.deepEqual(p.wash(), { lastWasStubborn: true });
+  assert.deepEqual(JSON.parse(st.getItem(SAVE_KEY)).wash, { lastWasStubborn: true });
+  const p2 = make(st);
+  assert.equal(p2.wash().lastWasStubborn, true);
+  p2.saveWash(null);
+  assert.equal(p2.wash().lastWasStubborn, true);
+});

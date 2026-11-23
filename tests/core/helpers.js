@@ -81,7 +81,8 @@ export function makeWorld({ data, art = {}, scenes = [], storage = memoryStorage
     onLock: () => { audio.setMuted(true); if (scenesMgr.current() !== 'locked') scenesMgr.open('locked'); },
     onUnlock: () => audio.setMuted(false),
   });
-  ctx = { scenes: scenesMgr, progress, assets, audio, timer, data, random, screen: { width: 1024, height: 768 } };
+  const updater = { version: () => '0.0', check: () => Promise.resolve(false) };
+  ctx = { scenes: scenesMgr, progress, assets, audio, timer, data, updater, random, screen: { width: 1024, height: 768 } };
   for (const S of scenes) scenesMgr.register(S);
   return { ctx, progress, audio, assets, scenes: scenesMgr, timer, storage, voices, errors };
 }

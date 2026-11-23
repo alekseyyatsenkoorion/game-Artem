@@ -253,6 +253,14 @@ export class Progress {
     this._changed({ type: 'tug' });
   }
 
+  // Мойка: была ли упрямая грязь в прошлый раз (чтобы не выпадала два раза подряд).
+  wash() { return { ...this.state.wash }; }
+  saveWash(state) {
+    if (!state || typeof state !== 'object') return;
+    this.state.wash = { lastWasStubborn: !!state.lastWasStubborn };
+    this._changed({ type: 'wash' });
+  }
+
   setting(name) { return this.state.settings[name]; }
   setSetting(name, value) {
     this.state.settings[name] = value;
