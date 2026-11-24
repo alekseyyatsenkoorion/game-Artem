@@ -4,5 +4,6 @@ import { PuzzleScene } from './puzzle.js';
 import { WashScene } from './wash.js';
 import { RepairScene } from './repair.js';
 import { FuelScene } from './fuel.js';
+import { TugScene } from './tug.js';
 
-export const scenes = [AssemblyScene, PuzzleScene, WashScene, RepairScene, FuelScene];
+export const scenes = [AssemblyScene, PuzzleScene, WashScene, RepairScene, FuelScene, TugScene];

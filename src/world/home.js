@@ -1,7 +1,6 @@
 // Главный экран (spec.md, раздел 4): три входа — карта, гараж, перетягивание каната.
-// На этапе 2 работает только гараж; карта и канат нарисованы закрытыми (шлагбаум и замок).
-// Чтобы открыть вход на этапе 3, достаточно поставить ему active: true в списке ENTRIES
-// (и зарегистрировать сцену): вход сам станет рабочим.
+// Вход работает, если он active и зарегистрированы все сцены из needs; иначе нарисован закрытым
+// (шлагбаум и замок). Канат начинается с выбора машины: гараж в режиме {mode: 'tug'}.
 import { Scene } from '../core/scene.js';
 import { IdleHint, drawHand, drawGlowRect } from '../core/ui.js';
 import { roundRect, inRect } from '../core/draw-utils.js';
@@ -9,9 +8,9 @@ import contentData from '../data/index.js';
 
 // Входы главного экрана. rect — зона касания в логических координатах (≥ 100 px).
 export const ENTRIES = [
-  { id: 'map', scene: 'map', active: false, rect: { x: 36, y: 250, w: 256, h: 380 } },
+  { id: 'map', scene: 'map', active: true, rect: { x: 36, y: 250, w: 256, h: 380 } },
   { id: 'garage', scene: 'garage', active: true, rect: { x: 318, y: 150, w: 388, h: 480 } },
-  { id: 'tug', scene: 'tug', active: false, rect: { x: 732, y: 250, w: 256, h: 380 } },
+  { id: 'tug', scene: 'garage', params: { mode: 'tug' }, needs: ['tug'], active: true, rect: { x: 732, y: 250, w: 256, h: 380 } },
 ];
 
 const GO_DELAY = 0.7; // ворота «зовут» машину, потом открывается гараж
@@ -36,7 +35,10 @@ export class HomeScene extends Scene {
     this.machine = firstMachine(this.ctx.data.machines);
     const has = (id) => !this.ctx.scenes || !this.ctx.scenes.has || this.ctx.scenes.has(id);
     // Публичное поле для тестов и e2e: {id, scene, rect, active}.
-    this.entries = ENTRIES.map((e) => ({ id: e.id, scene: e.scene, rect: { ...e.rect }, active: !!e.active && has(e.scene) }));
+    this.entries = ENTRIES.map((e) => ({
+      id: e.id, scene: e.scene, params: Object.assign({}, e.params || {}), rect: { ...e.rect },
+      active: !!e.active && has(e.scene) && (e.needs || []).every(has),
+    }));
     this.state = 'idle'; // idle | going
     this.going = null;
     this.t = 0;
@@ -96,7 +98,7 @@ export class HomeScene extends Scene {
       this.state = 'idle';
       this.going = null;
       this.hint.reset();
-      this.ctx.scenes.open(en.scene, {});
+      this.ctx.scenes.open(en.scene, Object.assign({}, en.params));
     }
   }
 
