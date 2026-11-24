@@ -9,6 +9,9 @@ import { GARAGE_SCENES, ICONS } from '../../src/world/garage.js';
 import { CROSS_ZONE, rectsOverlap, inRect } from '../../src/core/draw-utils.js';
 import { makeWorld, fakeGraphics, captureErrors, tick } from '../core/helpers.js';
 import { buildFixture, stub, opened, perform } from './fixture.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 const FX = buildFixture();
 const IDS = FX.data.machines.map((m) => m.id);

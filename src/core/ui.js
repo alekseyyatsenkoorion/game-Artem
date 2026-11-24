@@ -218,9 +218,11 @@ export class CoreUI {
   }
 }
 
-// Подсказки по простою: через 5 с — рука, через 10 с — голос, дальше голос раз в 15 с.
+// Подсказки по простою (просьба Alex 24.11): только если 30 с на экране ничего не делают —
+// рука и голос, дальше раз в 30 с. Любое касание сбрасывает счёт.
+export const HINT = { hand: 30, voice: 30, every: 30 }; // секунды
 export class IdleHint {
-  constructor({ handAfter = 5, voiceAfter = 10, voiceEvery = 15 } = {}) {
+  constructor({ handAfter = HINT.hand, voiceAfter = HINT.voice, voiceEvery = HINT.every } = {}) {
     this.handAfter = handAfter;
     this.voiceAfter = voiceAfter;
     this.voiceEvery = voiceEvery;

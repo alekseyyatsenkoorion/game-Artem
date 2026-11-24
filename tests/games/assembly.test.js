@@ -8,6 +8,9 @@ import art from '../../src/art/index.js';
 import { UI_ART } from '../../src/core/ui.js';
 import { CROSS_ZONE, rectsOverlap } from '../../src/core/draw-utils.js';
 import { makeWorld, fakeGraphics, captureErrors, tick } from '../core/helpers.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 class Home extends Scene { static id = 'home'; enter() { this.results = []; } onResult(r) { this.results.push(r); } }
 

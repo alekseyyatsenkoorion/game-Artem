@@ -7,6 +7,9 @@ import {
 } from '../../src/games/tug.js';
 import { captureErrors, makeWorld, memoryStorage } from '../core/helpers.js';
 import { openScene, settle, runToFinish, trackingGraphics, crossZoneViolations, offscreen, textCalls, Home, MACHINES, data, tick } from './helpers.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 // Ровный темп: тыки в phase, phase + 1/tempo, ... до limit секунд.
 function steady(tempo, phase = 0, limit = 120) {

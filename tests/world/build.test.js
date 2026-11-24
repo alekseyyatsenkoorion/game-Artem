@@ -9,6 +9,9 @@ import { captureErrors, memoryStorage, tick } from '../core/helpers.js';
 import {
   buildFixture, world, frames, perform, trackingGraphics, crossZoneViolations, offscreen, textCalls, ACTION_LIST, realData,
 } from './fixture.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 const FX = buildFixture();
 const REAL = buildFixture({ objects: 'real' });

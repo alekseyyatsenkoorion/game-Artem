@@ -6,6 +6,9 @@ import { cutPuzzle, pieceContains, pieceAt, pieceMargin } from '../../src/games/
 import { CROSS_ZONE, rectsOverlap } from '../../src/core/draw-utils.js';
 import { memoryStorage, captureErrors } from '../core/helpers.js';
 import { openScene, settle, runToFinish, MACHINES, data, tick } from './helpers.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 function drag(s, p, x, y) {
   s.onPointer({ type: 'down', x: p.cx, y: p.cy });

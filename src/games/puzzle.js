@@ -132,6 +132,7 @@ export class PuzzleScene extends Scene {
         g.globalAlpha = 0.28;
         this._drawPicture(g, 0, 0, B.w, B.h, 0, 0, 1);
         g.globalAlpha = 1;
+        this._drawGrid(g, 0, 0);
       },
     };
     this.bakedIds.push(this.paleId);
@@ -158,6 +159,18 @@ export class PuzzleScene extends Scene {
       this.bakedIds.push(id);
     }
     try { a.register(entries); } catch (e) { for (const p of this.pieces) p.img = null; this.bakedIds = []; this.paleId = null; this.layerId = null; }
+  }
+
+  // Сетка на поле: контур каждого гнезда, чтобы ребёнок видел, куда класть кусок.
+  // Светлая подложка + тёмная линия — видно и на светлых, и на тёмных местах картинки.
+  _drawGrid(g, ox, oy) {
+    g.save();
+    g.lineJoin = 'round';
+    for (const [color, width] of [['rgba(255,255,255,0.95)', 7], ['rgba(70,90,120,0.85)', 3]]) {
+      g.strokeStyle = color; g.lineWidth = width;
+      for (const cp of this.cut.pieces) { tracePiece(g, this.cut, cp, ox + cp.x, oy + cp.y, 1); g.stroke(); }
+    }
+    g.restore();
   }
 
   // ---------- логика ----------
@@ -395,6 +408,7 @@ export class PuzzleScene extends Scene {
       g.save(); g.globalAlpha = 0.28;
       this._drawPicture(g, 0, 0, this.board.w, this.board.h, this.board.x, this.board.y, 1);
       g.restore();
+      this._drawGrid(g, this.board.x, this.board.y);
     }
     const m = pieceMargin(this.cut);
     const baked = this.pieces.length > 0 && !!this.pieces[0].img;
