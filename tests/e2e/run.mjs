@@ -468,7 +468,11 @@ const MACHINES_E2E = await (async () => {
     await waitScene(page, 'garage');
     for (const win of [true, false]) {
       for (const level of ['easy', 'medium', 'hard']) {
-        await page.waitForFunction(() => { const g = window.__stroika; return g.scenes.current() === 'garage' && g.scenes.currentScene().target; }, null, { timeout: 20000 });
+        try {
+          await page.waitForFunction(() => { const g = window.__stroika; return g.scenes.current() === 'garage' && g.scenes.currentScene().target; }, null, { timeout: 20000 });
+        } catch (e) {
+          throw new Error(level + (win ? ' победа' : ' проигрыш') + ': гараж не ждёт выбора: ' + JSON.stringify(await page.evaluate(() => { const g = window.__stroika; const s = g.scenes.currentScene(); return { scene: g.scenes.current(), mode: s.mode, tugMode: s.tugMode, toWash: s.toWash, pending: s.pending }; })));
+        }
         await doTarget(cdp, await cur(page, 's.target'));
         await waitScene(page, 'tug', 8000);
         assert((await cur(page, 's.level')) === level, 'ждали уровень ' + level + ', а ' + (await cur(page, 's.level')));
