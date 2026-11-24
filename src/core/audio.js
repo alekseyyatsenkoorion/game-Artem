@@ -62,8 +62,10 @@ export class Audio {
     } catch (e) { /* ничего */ }
     if (this.onGesture) { try { this.onGesture(); } catch (e) { /* ничего */ } }
     // Голос: первая фраза должна прозвучать внутри настоящего жеста — «грунтуем» на нескольких первых касаниях.
+    // Пока голос ни разу не начал говорить (voices.ok()), грунтуем на каждом касании, но не больше 30 раз.
     this.primes = (this.primes || 0) + 1;
-    if (this.primes <= 4 && this.voices && this.voices.prime) {
+    const voiceOk = this.voices && this.voices.ok ? this.voices.ok() : this.primes > 4;
+    if (!voiceOk && this.primes <= 30 && this.voices && this.voices.prime) {
       try { this.voices.prime(); } catch (e) { /* ничего */ }
     }
     if (!this.unlocked) {
@@ -383,6 +385,7 @@ export function createSpeechVoices(win) {
   const Utt = win.SpeechSynthesisUtterance;
   if (!ss || !Utt) return null;
   let voice = null;
+  let started = false; // хоть одна фраза реально зазвучала — голос включён
   const pick = () => {
     try {
       const all = ss.getVoices() || [];
@@ -393,11 +396,14 @@ export function createSpeechVoices(win) {
   pick();
   try { ss.addEventListener ? ss.addEventListener('voiceschanged', pick) : (ss.onvoiceschanged = pick); } catch (e) { /* ничего */ }
   return {
+    ok() { return started; },
     prime() {
       // первая фраза должна прозвучать внутри касания — иначе iOS не включит голос
       try {
         if (ss.paused && ss.resume) ss.resume();
-        const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU'; ss.speak(u);
+        const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU';
+        if (voice) u.voice = voice;
+        ss.speak(u);
       } catch (e) { /* ничего */ }
     },
     speak(text) {
@@ -410,7 +416,8 @@ export function createSpeechVoices(win) {
       if (voice) u.voice = voice;
       u.rate = 0.95;
       u.pitch = 1.1;
-      u.onend = () => finish();
+      u.onstart = () => { started = true; };
+      u.onend = () => { started = true; finish(); };
       u.onerror = () => finish();
       // страховка: на iOS onend иногда не приходит
       const guard = setTimeout(() => finish(), 2500 + text.length * 110);
@@ -423,8 +430,11 @@ export function createSpeechVoices(win) {
     },
     info() {
       if (!voice) pick();
-      if (!voice) return 'русский голос не найден';
-      return voice.name + ' (' + voice.lang + (voice.localService ? ', на устройстве' : ', из сети') + ')';
+      if (!voice) {
+        let n = 0; try { n = (ss.getVoices() || []).length; } catch (e) { /* ничего */ }
+        return 'русский голос не найден (голосов всего: ' + n + ')' + (started ? ', говорит' : ', молчит');
+      }
+      return voice.name + ' (' + voice.lang + (voice.localService ? ', на устройстве' : ', из сети') + ')' + (started ? ', говорит' : ', молчит');
     },
   };
 }
