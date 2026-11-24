@@ -10,6 +10,7 @@
 // Действие ничего не знает о конкретных машинах и объектах: всё приходит в env от сцены стройки.
 import { dist, clamp, lerp, easeOut, easeInOut, inRect } from '../../core/draw-utils.js';
 import { drawGlow, drawGlowRect } from '../../core/ui.js';
+import { partOf, safePoint } from './layer-box.js';
 
 export const GROUND = 600; // земля на фоне bg/build
 export const SITE = { x: 700, y: 560 }; // середина площадки объекта
@@ -231,13 +232,27 @@ export class HoldAction extends BaseAction {
 export class TraceAction extends BaseAction {
   get kind() { return 'trace'; }
   // Дорожка: для машины — от её места вправо по земле; иначе задаёт подкласс.
+  // Если известно, где появится новая часть (env.box), дорожка идёт по земле до её правого края.
   makePath() {
     const r = this.homeRect();
-    if (!r) return densify([{ x: 440, y: GROUND - 40 }, { x: 960, y: GROUND - 40 }], 50);
+    const b = this.env.box;
+    if (!r) {
+      const ax = this.area();
+      return densify([{ x: ax.x0, y: GROUND - 40 }, { x: ax.x1, y: GROUND - 40 }], 50);
+    }
     const y = Math.round(r.y + r.h / 2);
     const x0 = Math.round(r.x + r.w / 2);
-    const x1 = Math.round(1024 - r.w / 2 - 16);
+    const xMax = Math.round(1024 - r.w / 2 - 16);
+    const x1 = b ? Math.round(clamp(b.x + b.w, Math.min(xMax, x0 + 240), xMax)) : xMax;
     return densify([{ x: x0, y }, { x: x1, y }], 50);
+  }
+  // Участок земли, где работаем: по ширине новой части или общий.
+  area() {
+    const b = this.env.box;
+    if (!b) return { x0: 440, x1: 960 };
+    let x0 = clamp(b.x, 120, 980), x1 = clamp(b.x + b.w, 120, 980);
+    if (x1 - x0 < 240) { const c = (x0 + x1) / 2; x0 = clamp(c - 120, 120, 740); x1 = x0 + 240; }
+    return { x0: Math.round(x0), x1: Math.round(x1) };
   }
   reset() {
     this.path = this.makePath();
@@ -392,10 +407,21 @@ export class DragAction extends BaseAction {
     this.anim = null; // {from, to, t, dur, snap}
   }
   source() { return { x: 220, y: 548 }; }
-  // Место для повтора i.
+  // Место для повтора i: часть прямоугольника новой части объекта (env.box), иначе общее место.
   spot(i) {
+    const r = this.spotRect(i);
+    if (!r) return this.fallbackSpot(i);
+    return safePoint({ x: r.x + r.w / 2, y: r.y + r.h / 2 }, { minX: 180, maxX: 944, minY: this.minY() });
+  }
+  fallbackSpot(i) {
     const n = this.repeats;
     return { x: Math.round(480 + (i + 0.5) * 440 / n), y: 560 };
+  }
+  // Как делить новую часть между повторами: 'x' — слева направо, 'y' — рядами снизу вверх.
+  splitAxis() { return 'x'; }
+  spotRect(i) {
+    const b = this.env.box;
+    return b ? partOf(b, i, this.repeats, this.splitAxis()) : null;
   }
   itemSize() { return { w: 130, h: 56 }; }
   fraction() { return this.anim && this.anim.snap ? clamp(this.anim.t / this.anim.dur, 0, 1) : 0; }
@@ -465,7 +491,11 @@ export class DragAction extends BaseAction {
     g.restore();
   }
   drawSpot(g, t) {
-    const s = this.itemSize();
+    const r = this.spotRect(this.repeat);
+    const s = r ? { w: clamp(r.w, 80, 400), h: clamp(r.h, 44, 300) } : this.itemSize();
+    // подсветка целиком на экране и не у крестика
+    s.w = Math.min(s.w, 2 * (t.x - 100), 2 * (1020 - t.x));
+    s.h = Math.min(s.h, 2 * (t.y - 100), 2 * (740 - t.y));
     g.save();
     g.globalAlpha = 0.45 + 0.2 * Math.sin(this.env.time() * 5);
     g.fillStyle = '#ffffff';

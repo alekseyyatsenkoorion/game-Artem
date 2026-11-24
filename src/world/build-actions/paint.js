@@ -1,11 +1,23 @@
 // paint — закрасить пальцем: ведёт валик змейкой по объекту.
-import { TraceAction, densify } from './common.js';
+import { TraceAction, densify, clamp } from './common.js';
 
 const ROWS = [424, 484, 544];
 const X0 = 480, X1 = 920;
 
+// Змейка по прямоугольнику новой части (env.box): ряды через ~60 px, от края до края; иначе общая.
+function snake(b) {
+  if (!b) return { rows: ROWS, x0: X0, x1: X1 };
+  const n = clamp(Math.round(b.h / 60), 1, 3);
+  const rows = [];
+  for (let i = 0; i < n; i++) rows.push(Math.round(clamp(b.y + (i + 0.5) * b.h / n, 140, 720)));
+  let x0 = clamp(b.x + 30, 140, 990), x1 = clamp(b.x + b.w - 30, 140, 990);
+  if (x1 - x0 < 200) { const c = (x0 + x1) / 2; x0 = clamp(c - 100, 140, 790); x1 = x0 + 200; }
+  return { rows, x0: Math.round(x0), x1: Math.round(x1) };
+}
+
 export class PaintAction extends TraceAction {
   makePath() {
+    const { rows: ROWS, x0: X0, x1: X1 } = snake(this.env.box);
     const pts = [];
     ROWS.forEach((y, i) => {
       if (i % 2 === 0) pts.push({ x: X0, y }, { x: X1, y });

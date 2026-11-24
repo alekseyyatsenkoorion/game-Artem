@@ -11,12 +11,15 @@ export class SpreadAction extends TraceAction {
     if (this.done) return;
     const m = this.movingRect();
     const front = m ? m.x + m.w : this.pointAt(this.pos).x;
-    const k = clamp(1 - (front - (SITE.x - 140)) / 280, 0.12, 1);
+    // куча — посреди места новой части (env.box), иначе посреди площадки
+    const a = this.area();
+    const cx = this.env.box ? Math.round((a.x0 + a.x1) / 2) : SITE.x;
+    const k = clamp(1 - (front - (cx - 140)) / 280, 0.12, 1);
     g.fillStyle = '#e2b65a';
-    g.beginPath(); g.ellipse(SITE.x, GROUND, 150, 90 * k, 0, Math.PI, 0); g.fill();
+    g.beginPath(); g.ellipse(cx, GROUND, 150, 90 * k, 0, Math.PI, 0); g.fill();
     // разровненный слой позади
-    const x0 = SITE.x - 160;
-    if (front > x0) { g.fillStyle = '#e8c97a'; g.fillRect(x0, GROUND - 10, Math.min(front, SITE.x + 160) - x0, 12); }
+    const x0 = cx - 160;
+    if (front > x0) { g.fillStyle = '#e8c97a'; g.fillRect(x0, GROUND - 10, Math.min(front, cx + 160) - x0, 12); }
   }
   drawTool(g, x, y) {
     g.fillStyle = '#f2c14e';
