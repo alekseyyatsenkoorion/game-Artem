@@ -31,6 +31,8 @@ export class Audio {
 
   // ---------- включение ----------
 
+  // Вызывается ядром на каждом касании (touchstart, touchend, pointerdown). iOS считает «жестом»
+  // не каждое из них, поэтому включение повторяется, пока звук и голос действительно не заработают.
   unlock() {
     if (!this.ac) {
       try {
@@ -48,22 +50,34 @@ export class Audio {
         this.ac = null;
       }
     }
+    const running = this.ac && this.ac.state === 'running';
     try {
-      if (this.ac && this.ac.state !== 'running' && this.ac.resume) this.ac.resume();
-      // iOS включает звук только если в жесте прозвучал хоть какой-то звук
-      if (this.ac && !this.unlocked) {
+      if (this.ac && !running) {
+        if (this.ac.resume) { const p = this.ac.resume(); if (p && p.catch) p.catch(() => {}); }
+        // iOS включает звук только если в жесте прозвучал хоть какой-то звук
         const b = this.ac.createBuffer(1, 1, 22050);
         const s = this.ac.createBufferSource();
         s.buffer = b; s.connect(this.ac.destination); s.start(0);
       }
     } catch (e) { /* ничего */ }
+    if (this.onGesture) { try { this.onGesture(); } catch (e) { /* ничего */ } }
+    // Голос: первая фраза должна прозвучать внутри настоящего жеста — «грунтуем» на нескольких первых касаниях.
+    // Пока голос ни разу не начал говорить (voices.ok()), грунтуем на каждом касании, но не больше 30 раз.
+    this.primes = (this.primes || 0) + 1;
+    const voiceOk = this.voices && this.voices.ok ? this.voices.ok() : this.primes > 4;
+    if (!voiceOk && this.primes <= 30 && this.voices && this.voices.prime) {
+      try { this.voices.prime(); } catch (e) { /* ничего */ }
+    }
     if (!this.unlocked) {
       this.unlocked = true;
-      if (this.voices && this.voices.prime) {
-        try { this.voices.prime(); } catch (e) { /* ничего */ }
-      }
       this._next();
     }
+  }
+
+  // Состояние звука для экрана взрослых.
+  soundState() {
+    if (!this.ac) return 'нет';
+    return this.ac.state || 'неизвестно';
   }
 
   // ---------- звуки ----------
@@ -237,8 +251,9 @@ export class Audio {
   }
 
   voiceInfo() {
-    if (!this.voices) return 'нет';
-    try { return this.voices.info(); } catch (e) { return 'неизвестно'; }
+    const snd = ' · звук: ' + this.soundState();
+    if (!this.voices) return 'нет' + snd;
+    try { return this.voices.info() + snd; } catch (e) { return 'неизвестно' + snd; }
   }
 }
 
@@ -370,6 +385,7 @@ export function createSpeechVoices(win) {
   const Utt = win.SpeechSynthesisUtterance;
   if (!ss || !Utt) return null;
   let voice = null;
+  let started = false; // хоть одна фраза реально зазвучала — голос включён
   const pick = () => {
     try {
       const all = ss.getVoices() || [];
@@ -380,9 +396,15 @@ export function createSpeechVoices(win) {
   pick();
   try { ss.addEventListener ? ss.addEventListener('voiceschanged', pick) : (ss.onvoiceschanged = pick); } catch (e) { /* ничего */ }
   return {
+    ok() { return started; },
     prime() {
       // первая фраза должна прозвучать внутри касания — иначе iOS не включит голос
-      try { const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU'; ss.speak(u); } catch (e) { /* ничего */ }
+      try {
+        if (ss.paused && ss.resume) ss.resume();
+        const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU';
+        if (voice) u.voice = voice;
+        ss.speak(u);
+      } catch (e) { /* ничего */ }
     },
     speak(text) {
       if (!voice) pick();
@@ -394,7 +416,8 @@ export function createSpeechVoices(win) {
       if (voice) u.voice = voice;
       u.rate = 0.95;
       u.pitch = 1.1;
-      u.onend = () => finish();
+      u.onstart = () => { started = true; };
+      u.onend = () => { started = true; finish(); };
       u.onerror = () => finish();
       // страховка: на iOS onend иногда не приходит
       const guard = setTimeout(() => finish(), 2500 + text.length * 110);
@@ -407,8 +430,11 @@ export function createSpeechVoices(win) {
     },
     info() {
       if (!voice) pick();
-      if (!voice) return 'русский голос не найден';
-      return voice.name + ' (' + voice.lang + (voice.localService ? ', на устройстве' : ', из сети') + ')';
+      if (!voice) {
+        let n = 0; try { n = (ss.getVoices() || []).length; } catch (e) { /* ничего */ }
+        return 'русский голос не найден (голосов всего: ' + n + ')' + (started ? ', говорит' : ', молчит');
+      }
+      return voice.name + ' (' + voice.lang + (voice.localService ? ', на устройстве' : ', из сети') + ')' + (started ? ', говорит' : ', молчит');
     },
   };
 }
