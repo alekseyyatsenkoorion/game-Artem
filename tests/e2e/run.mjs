@@ -193,6 +193,46 @@ async function runFromGarage(page, cdp, id, params, play, shotName) {
   return out;
 }
 
+// Выполнить ожидаемое действие сцены этапа 3 по её публичному полю target (stage3-brief).
+async function doTarget(cdp, t) {
+  if (t.kind === 'tap') return tap(cdp, t.x, t.y);
+  if (t.kind === 'hold') {
+    await touch(cdp, 'touchStart', [{ x: t.x, y: t.y }]);
+    await sleep(Math.max(300, (t.seconds || 1.5) * 1000 + 400));
+    await touch(cdp, 'touchEnd', []);
+    return sleep(60);
+  }
+  if (t.kind === 'drag') return dragTouch(cdp, t.x, t.y, t.to.x, t.to.y, 10);
+  if (t.kind === 'trace') {
+    const pts = t.path;
+    await touch(cdp, 'touchStart', [pts[0]]);
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 20));
+      for (let k = 1; k <= n; k++) { await touch(cdp, 'touchMove', [{ x: a.x + (b.x - a.x) * k / n, y: a.y + (b.y - a.y) * k / n }]); await sleep(8); }
+    }
+    await touch(cdp, 'touchEnd', []);
+    return sleep(60);
+  }
+  throw new Error('неизвестный target ' + JSON.stringify(t));
+}
+
+// Пройти стройку касаниями до конца; возвращает число выполненных действий.
+async function playBuild(page, cdp, shotPrefix) {
+  let actions = 0, idle = 0, lastShotStep = -1;
+  for (;;) {
+    const st = await page.evaluate(() => { const g = window.__stroika; const s = g.scenes.currentScene(); return { id: g.scenes.current(), loading: g.scenes.loading, t: s && s.target, step: s && s.stepIndex }; });
+    if (st.id !== 'build') return actions;
+    if (!st.t || st.loading) { if (++idle > 300) throw new Error('стройка зависла на шаге ' + st.step); await sleep(100); continue; }
+    idle = 0;
+    if (shotPrefix && st.step !== lastShotStep && st.step % 3 === 0) { lastShotStep = st.step; await shot(page, shotPrefix + '-shag-' + String(st.step + 1).padStart(2, '0')); }
+    await doTarget(cdp, st.t);
+    actions++;
+    if (actions > 2000) throw new Error('слишком много действий');
+    await sleep(150);
+  }
+}
+
 // Все машины открыты и собраны, на экране гараж (если предыдущие проверки пропущены).
 async function inGarage(page) {
   await page.evaluate(() => { const g = window.__stroika; g.progress.unlockAll(); for (const m of g.data.machines) g.progress.setAssembled(m.id); });
@@ -215,13 +255,20 @@ const MACHINES_E2E = await (async () => {
   // Прогон группы 3 идёт дольше 30 минут игры: родительский таймер выключаем, его проверяет 3.10 отдельно.
   await page.evaluate(() => window.__stroika.timer.setMinutes(0));
 
-  await check('3.1', 'Главный экран: три входа; гараж открывается, карта и канат пока закрыты (этап 3)', async () => {
+  await check('3.1', 'Главный экран: работают три входа — карта, гараж, канат', async () => {
     await shot(page, '01-glavnyi-ekran');
     const entries = await cur(page, 's.entries.map((e) => ({ id: e.id, rect: e.rect, active: e.active }))');
     assert(entries.length === 3, 'входов ' + entries.length);
-    for (const e of entries.filter((x) => !x.active)) {
-      const c = center(e.rect); await tap(cdp, c.x, c.y); await sleep(900);
-      assert((await scene(page)) === 'home', 'закрытый вход ' + e.id + ' открыл ' + (await scene(page)));
+    assert(entries.every((e) => e.active), 'закрытые входы: ' + entries.filter((e) => !e.active).map((e) => e.id));
+    for (const [id, want] of [['map', 'map'], ['tug', 'garage']]) {
+      const c = center(entries.find((e) => e.id === id).rect);
+      await tap(cdp, c.x, c.y);
+      await waitScene(page, want, 5000);
+      await sleep(600);
+      await shot(page, '01-vhod-' + id);
+      await tap(cdp, 48, 48);
+      await waitScene(page, 'home', 5000);
+      await sleep(300);
     }
     await sleep(5600);
     await shot(page, '02-glavnyi-ekran-podskazka-ruka');
@@ -232,7 +279,12 @@ const MACHINES_E2E = await (async () => {
     await shot(page, '03-garazh-novaya-igra');
   });
 
-  await check('3.3', 'Сборка: все 10 машин собираются касаниями из гаража; после каждой открывается следующая (временное правило этапа 2)', async () => {
+  await check('3.3', 'Сборка: все 10 машин собираются касаниями из гаража (машины открыты с экрана взрослых)', async () => {
+    // этап 3: машины открывает стройка; здесь открываем все сразу, как кнопка «открыть все машины»
+    await page.evaluate(() => window.__stroika.progress.unlockAll());
+    await page.evaluate(() => { window.__stroika.scenes.backToRoot(); return window.__stroika.scenes.open('garage'); });
+    await waitScene(page, 'garage');
+    await sleep(600);
     for (let n = 0; n < MACHINES_E2E.length; n++) {
       const id = MACHINES_E2E[n];
       const slot = await cur(page, 's.slots.find((x) => x.machine === ' + JSON.stringify(id) + ')');
@@ -245,15 +297,13 @@ const MACHINES_E2E = await (async () => {
       assert(await cur(page, 's.isAssembled()'), id + ': не все детали встали');
       await waitScene(page, 'garage', 12000);
       assert(await page.evaluate((id) => window.__stroika.progress.isAssembled(id), id), id + ' не сохранена');
-      const next = MACHINES_E2E[n + 1];
-      if (next) assert(await page.evaluate((id) => window.__stroika.progress.isUnlocked(id), next), next + ' не открылась');
       await sleep(1800);
     }
     await shot(page, '04-garazh-vse-sobrany');
     return MACHINES_E2E.length + ' машин';
   });
 
-  await check('3.2', 'Гараж: тык по каждой из 10 машин показывает её крупно со значками', async () => {
+  await check('3.2', 'Гараж: тык по каждой из 10 машин показывает её крупно со значками (собрать, пазлы, помыть)', async () => {
     for (let n = 0; n < MACHINES_E2E.length; n++) {
       const id = MACHINES_E2E[n];
       await page.waitForFunction(() => window.__stroika.scenes.currentScene().mode === 'row', null, { timeout: 5000 });
@@ -263,7 +313,7 @@ const MACHINES_E2E = await (async () => {
       await page.waitForFunction(() => window.__stroika.scenes.currentScene().mode === 'big', null, { timeout: 5000 });
       assert((await cur(page, 's.selected')) === id, 'крупно не та машина');
       const icons = await cur(page, 's.icons.map((i) => i.scene + (i.params && i.params.size ? i.params.size : ""))');
-      for (const need of ['assembly', 'puzzle16', 'puzzle25', 'wash', 'repair', 'fuel']) assert(icons.includes(need), id + ': нет значка ' + need);
+      for (const need of ['assembly', 'puzzle16', 'puzzle25', 'wash']) assert(icons.includes(need), id + ': нет значка ' + need);
       if (n === 0 || n === 9) await shot(page, '05-garazh-krupno-' + id);
       // тык мимо машины и значков — назад к ряду
       await tap(cdp, 980, 140);
@@ -342,8 +392,114 @@ const MACHINES_E2E = await (async () => {
     return notes.join(' ');
   });
 
-  await check('3.9', 'Крестик выводит из каждой сцены этапа 2, прогресс на месте', async () => {
-    for (const [id, params] of [['assembly', { machine: 'katok' }], ['puzzle', { machine: 'katok', size: 16 }], ['wash', { machine: 'katok' }], ['repair', { machine: 'katok' }], ['fuel', { machine: 'katok' }]]) {
+  await check('3.5 / 3.7', 'Карта: путь от первого участка до финала касаниями; все 10 объектов и 110 шагов стройки; машины открываются по таблице; выход посреди стройки — продолжение с того же шага', async () => {
+    // новая игра
+    await page.evaluate(() => { const g = window.__stroika; g.progress.reset(); g.scenes.backToRoot(); return g.scenes.open('map'); });
+    await waitScene(page, 'map');
+    await sleep(800);
+    await shot(page, '20-karta-nachalo');
+    const objects = await page.evaluate(() => window.__stroika.data.objects.map((o) => ({ id: o.id, unlocks: o.unlocks, steps: o.steps.length })));
+    let actions = 0, steps = 0, resumed = false;
+    const notes = [];
+    for (let guard = 0; guard < 80; guard++) {
+      const stop = await page.evaluate(() => window.__stroika.progress.mapStop());
+      const total = await page.evaluate(() => window.__stroika.scenes.currentScene().total);
+      if (stop >= total) break;
+      // ждём, пока машина доедет и появится цель
+      await page.waitForFunction(() => { const g = window.__stroika; return g.scenes.current() === 'map' && !g.scenes.loading && g.scenes.currentScene().target; }, null, { timeout: 20000 });
+      const info = await page.evaluate((n) => window.__stroika.scenes.currentScene().stops[n], stop);
+      const t = await cur(page, 's.target');
+      await doTarget(cdp, t);
+      if (info.kind === 'finale') {
+        await sleep(1500);
+        await shot(page, '29-karta-final-salyut');
+        await page.waitForFunction((n) => window.__stroika.progress.mapStop() > n, stop, { timeout: 30000 });
+        notes.push('финал');
+        continue;
+      }
+      const sceneId = info.kind === 'build' ? 'build' : info.kind;
+      await waitScene(page, sceneId, 10000);
+      await sleep(300);
+      if (info.kind === 'build') {
+        const obj = objects.find((o) => o.id === info.object);
+        if (!resumed && info.section === 1) {
+          // 2.13 в браузере: два действия, выход крестиком, возврат — тот же шаг
+          for (let i = 0; i < 4; i++) { const tt = await cur(page, 's.target'); if (tt) await doTarget(cdp, tt); await sleep(400); }
+          const before = await page.evaluate((id) => window.__stroika.progress.objectState(id), obj.id);
+          await tap(cdp, 48, 48);
+          await waitScene(page, 'map', 8000);
+          await page.waitForFunction(() => window.__stroika.scenes.currentScene().target, null, { timeout: 20000 });
+          await doTarget(cdp, await cur(page, 's.target'));
+          await waitScene(page, 'build', 10000);
+          await sleep(300);
+          const again = await cur(page, '({ step: s.stepIndex })');
+          assert(again.step === before.step, '2.13: был шаг ' + before.step + ', стал ' + again.step);
+          resumed = true;
+        }
+        actions += await playBuild(page, cdp, info.section < 2 || info.section === 9 ? '2' + info.section + '-stroika-' + obj.id : null);
+        const st = await page.evaluate((id) => window.__stroika.progress.objectState(id), obj.id);
+        assert(st.done, obj.id + ' не построен');
+        steps += obj.steps;
+        if (obj.unlocks) assert(await page.evaluate((m) => window.__stroika.progress.isUnlocked(m), obj.unlocks), obj.unlocks + ' не открылась после ' + obj.id);
+        await shot(page, '3' + info.section + '-gotovo-' + obj.id);
+      } else if (info.kind === 'assembly') {
+        await assembleAll(page, cdp);
+      } else if (info.kind === 'wash') {
+        await playWash(page, cdp);
+      } else if (info.kind === 'repair') {
+        await playRepair(page, cdp);
+      } else if (info.kind === 'fuel') {
+        await playFuel(page, cdp);
+      }
+      await waitScene(page, 'map', 30000);
+      await page.waitForFunction((n) => window.__stroika.progress.mapStop() > n, stop, { timeout: 10000 });
+      if (stop === 5) await shot(page, '21-karta-seredina');
+    }
+    const end = await page.evaluate(() => ({ stop: window.__stroika.progress.mapStop(), all: window.__stroika.data.machines.every((m) => window.__stroika.progress.isUnlocked(m.id)) }));
+    assert(steps === 110, 'шагов пройдено ' + steps);
+    assert(end.all, 'не все машины открылись');
+    await shot(page, '22-karta-konec');
+    return 'остановок ' + end.stop + ', шагов ' + steps + ', касаний ' + actions + (notes.length ? ', ' + notes.join(', ') : '');
+  });
+
+  await check('3.8', 'Канат: победа ровным темпом и поражение при остановке, на каждом из трёх уровней', async () => {
+    const out = [];
+    await page.evaluate(() => { const g = window.__stroika; g.progress.unlockAll(); g.progress.saveTug({ nextLevel: 'easy', wins: 0, losses: 0 }); g.scenes.backToRoot(); return g.scenes.open('garage', { mode: 'tug' }); });
+    await waitScene(page, 'garage');
+    for (const win of [true, false]) {
+      for (const level of ['easy', 'medium', 'hard']) {
+        await page.waitForFunction(() => { const g = window.__stroika; return g.scenes.current() === 'garage' && g.scenes.currentScene().target; }, null, { timeout: 20000 });
+        await doTarget(cdp, await cur(page, 's.target'));
+        await waitScene(page, 'tug', 8000);
+        assert((await cur(page, 's.level')) === level, 'ждали уровень ' + level + ', а ' + (await cur(page, 's.level')));
+        const t0 = Date.now();
+        let shotDone = false;
+        while ((await scene(page)) === 'tug' && Date.now() - t0 < 60000) {
+          const t = await cur(page, 's.target');
+          if (win && t) await tap(cdp, t.x, t.y); // ровно, ~6 тыков в секунду
+          else await sleep(100);
+          if (!shotDone && Date.now() - t0 > 1500) { await shot(page, 'kanat-' + level + (win ? '-tyanem' : '-stoim')); shotDone = true; }
+        }
+        const p = await page.evaluate(() => window.__stroika.progress.tug());
+        out.push(level + ':' + (win ? 'победа' : 'проигрыш'));
+        assert(win ? p.wins >= 1 : p.losses >= 1, level + ': исход не тот ' + JSON.stringify(p));
+        if (!win) {
+          await waitScene(page, 'wash', 10000);
+          await sleep(300);
+          if (level === 'easy') await shot(page, 'kanat-posle-luzhi-moika');
+          await playWash(page, cdp);
+          await waitScene(page, 'garage', 15000);
+        }
+      }
+    }
+    const p = await page.evaluate(() => window.__stroika.progress.tug());
+    assert(p.wins === 3 && p.losses === 3, JSON.stringify(p));
+    return out.join(', ');
+  });
+
+  await check('3.9', 'Крестик выводит из каждой сцены, прогресс на месте', async () => {
+    await inGarage(page);
+    for (const [id, params] of [['build', { object: 'most' }], ['map', {}], ['tug', { machine: 'katok' }], ['assembly', { machine: 'katok' }], ['puzzle', { machine: 'katok', size: 16 }], ['wash', { machine: 'katok' }], ['repair', { machine: 'katok' }], ['fuel', { machine: 'katok' }]]) {
       await page.evaluate(({ id, params }) => window.__stroika.scenes.open(id, params), { id, params });
       await waitScene(page, id);
       await sleep(200);
@@ -379,10 +535,10 @@ const MACHINES_E2E = await (async () => {
     await sleep(250);
   });
 
-  await check('3.13', 'Хаотичные касания (200 тыков и протяжек) в каждой сцене этапа 2', async () => {
+  await check('3.13', 'Хаотичные касания (200 тыков и протяжек) в каждой сцене', async () => {
     let seed = 11;
     const rnd = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
-    const list = [['home'], ['garage'], ['assembly', { machine: 'ekskavator' }], ['puzzle', { machine: 'avtokran', size: 25 }], ['wash', { machine: 'pogruzchik' }], ['repair', { machine: 'greider' }], ['fuel', { machine: 'betonomeshalka' }]];
+    const list = [['home'], ['garage'], ['map'], ['build', { object: 'dom-mnogo' }], ['tug', { machine: 'samosval' }], ['garage', { mode: 'tug' }], ['assembly', { machine: 'ekskavator' }], ['puzzle', { machine: 'avtokran', size: 25 }], ['wash', { machine: 'pogruzchik' }], ['repair', { machine: 'greider' }], ['fuel', { machine: 'betonomeshalka' }]];
     for (const [id, params] of list) {
       await page.evaluate(() => window.__stroika.scenes.backToRoot());
       await sleep(100);
@@ -434,7 +590,7 @@ const MACHINES_E2E = await (async () => {
 
   await check('3.12', 'Снимки: картинка в экране, нет пустых и чёрных экранов (по каждой сцене)', async () => {
     const out = [];
-    for (const [id, params] of [['home'], ['garage'], ['assembly', { machine: 'bashennyi-kran' }], ['puzzle', { machine: 'greider', size: 25 }], ['wash', { machine: 'katok' }], ['repair', { machine: 'traktor', kind: 'wheel' }], ['fuel', { machine: 'avtokran' }]]) {
+    for (const [id, params] of [['home'], ['garage'], ['map'], ['build', { object: 'parking' }], ['tug', { machine: 'greider' }], ['assembly', { machine: 'bashennyi-kran' }], ['puzzle', { machine: 'greider', size: 25 }], ['wash', { machine: 'katok' }], ['repair', { machine: 'traktor', kind: 'wheel' }], ['fuel', { machine: 'avtokran' }]]) {
       await page.evaluate(() => window.__stroika.scenes.backToRoot());
       if (id !== 'home') { await page.evaluate(({ id, params }) => window.__stroika.scenes.open(id, params || {}), { id, params }); await waitScene(page, id); }
       await sleep(400);
@@ -572,8 +728,8 @@ await check('5.1', 'Вес игры', async () => {
   await check('5.3', 'Кадры в секунду в каждой сцене: обычная скорость и процессор ×4', async () => {
     const out = [];
     await page.evaluate(() => { window.__stroika.progress.unlockAll(); window.__stroika.progress.savePuzzle('bashennyi-kran', 16, Array.from({ length: 16 }, (_, i) => i)); });
-    for (const id of ['home', 'garage', 'assembly', 'puzzle', 'wash', 'repair', 'fuel', 'parent', 'locked']) {
-      await page.evaluate((id) => { const s = window.__stroika.scenes; s.backToRoot(); if (id !== 'home') s.open(id, { machine: 'bashennyi-kran', size: 25 }); }, id);
+    for (const id of ['home', 'garage', 'map', 'build', 'tug', 'assembly', 'puzzle', 'wash', 'repair', 'fuel', 'parent', 'locked']) {
+      await page.evaluate((id) => { const s = window.__stroika.scenes; s.backToRoot(); if (id !== 'home') s.open(id, { machine: 'bashennyi-kran', size: 25, object: 'dom-mnogo' }); }, id);
       await sleep(500);
       const normal = await fps(2);
       await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
@@ -587,12 +743,12 @@ await check('5.1', 'Вес игры', async () => {
     return out.join(', ');
   });
 
-  await check('5.4 / 0.4', 'Память и таймеры не растут при 50 переходах между сценами (сборка, пазл, мойка, мастерская, заправка, гараж)', async () => {
+  await check('5.4 / 0.4', 'Память и таймеры не растут при 50 переходах между сценами (все сцены, кроме экранов взрослых)', async () => {
     const heap = async () => { await cdp.send('HeapProfiler.collectGarbage'); await sleep(200); return (await cdp.send('Runtime.getHeapUsage')).usedSize; };
     const cycle = async (n) => {
-      const ids = ['assembly', 'puzzle', 'wash', 'repair', 'fuel', 'garage'];
+      const ids = ['assembly', 'puzzle', 'wash', 'repair', 'fuel', 'garage', 'map', 'build', 'tug'];
       for (let i = 0; i < n; i++) {
-        await page.evaluate(async (id) => { await window.__stroika.scenes.open(id, { machine: 'samosval', size: 16 }); }, ids[i % ids.length]);
+        await page.evaluate(async (id) => { await window.__stroika.scenes.open(id, { machine: 'samosval', size: 16, object: 'pesochnitsa' }); }, ids[i % ids.length]);
         await sleep(30);
         await page.evaluate(() => window.__stroika.scenes.back());
       }
