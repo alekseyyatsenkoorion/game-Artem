@@ -4,6 +4,7 @@
 // BUILD:START
 const VERSION = "1.5";
 const FILES = [
+  "assets/gpt/bg-garazh.webp",
   "assets/gpt/bg-masterskaya.webp",
   "assets/gpt/bg-moika.webp",
   "assets/gpt/manifest.json",
