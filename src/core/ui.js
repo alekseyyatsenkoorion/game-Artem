@@ -100,6 +100,7 @@ function puzzleGrid(g, w, h, n, color) {
 }
 function drawIconPuzzle16(g, w, h) { puzzleGrid(g, w, h, 4, '#8b5cf6'); }
 function drawIconPuzzle25(g, w, h) { puzzleGrid(g, w, h, 5, '#d0459a'); }
+function drawIconPuzzle36(g, w, h) { puzzleGrid(g, w, h, 6, '#e0782a'); }
 
 function drawIconWash(g, w, h) {
   badge(g, w, h, '#25a7e0');
@@ -149,6 +150,7 @@ export const UI_ART = {
   'ui/icon-assembly': { w: 120, h: 120, draw: drawIconAssembly },
   'ui/icon-puzzle16': { w: 120, h: 120, draw: drawIconPuzzle16 },
   'ui/icon-puzzle25': { w: 120, h: 120, draw: drawIconPuzzle25 },
+  'ui/icon-puzzle36': { w: 120, h: 120, draw: drawIconPuzzle36 },
   'ui/icon-wash': { w: 120, h: 120, draw: drawIconWash },
   'ui/icon-repair': { w: 120, h: 120, draw: drawIconRepair },
   'ui/icon-fuel': { w: 120, h: 120, draw: drawIconFuel },

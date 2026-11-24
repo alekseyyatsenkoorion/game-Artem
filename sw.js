@@ -2,7 +2,7 @@
 // Новая версия скачивается в фоне целиком и включается при следующем запуске.
 // Блок между метками заполняет tools/build.mjs при выкладке — руками не правится.
 // BUILD:START
-const VERSION = "1.5";
+const VERSION = "1.6";
 const FILES = [
   "assets/gpt/bg-garazh.webp",
   "assets/gpt/bg-masterskaya.webp",

@@ -1,13 +1,14 @@
 // Гараж (spec.md, раздел 4 «Гараж»).
 // Все машины на своих местах: закрытые — силуэтом, открытые несобранные — кучкой деталей,
 // собранные — целиком. Тык по собранной: она выезжает крупно, голос называет её и говорит факт,
-// вокруг три значка: собрать заново, пазл (16 и 25), помыть. Про конкретные машины здесь ничего нет:
+// вокруг значки: собрать заново, пазлы (16, 25, 36), помыть. Про конкретные машины здесь ничего нет:
 // всё из ctx.data.machines. Машины открывает стройка (Progress.completeObject), не гараж.
 // Факты гараж ведёт сам: по кругу по machine.facts, начиная с factWithPicture, чтобы в первый же
 // раз была картинка. Пока звучит этот факт (и ещё FACT_CARD_HOLD с), рядом с машиной карточка fact/<id>.
 // Режим выбора для каната: params {mode: 'tug'} — тык по открытой машине открывает канат с ней;
 // проигравшая машина едет на мойку, потом снова выбор.
 import { Scene } from '../core/scene.js';
+import { PUZZLE_NEEDS } from '../core/progress.js';
 import { IdleHint, drawHand, drawGlowRect } from '../core/ui.js';
 import { roundRect, inRect, easeOut, easeInOut, lerp } from '../core/draw-utils.js';
 import contentData from '../data/index.js';
@@ -21,6 +22,7 @@ export const ICONS = [
   { icon: 'ui/icon-assembly', scene: 'assembly' },
   { icon: 'ui/icon-puzzle16', scene: 'puzzle', size: 16 },
   { icon: 'ui/icon-puzzle25', scene: 'puzzle', size: 25 },
+  { icon: 'ui/icon-puzzle36', scene: 'puzzle', size: 36 },
   { icon: 'ui/icon-wash', scene: 'wash' },
 ];
 
@@ -198,7 +200,7 @@ export class GarageScene extends Scene {
     return list.map((ic, i) => {
       const params = { machine: id };
       if (ic.size) params.size = ic.size;
-      const locked = ic.size === 25 && this.ctx.progress.puzzleState(id, 16) !== 'done';
+      const locked = !!PUZZLE_NEEDS[ic.size] && this.ctx.progress.puzzleState(id, PUZZLE_NEEDS[ic.size]) !== 'done';
       return { icon: ic.icon, scene: ic.scene, params, locked, rect: { x: x0 + i * (ICON + ICON_GAP), y: ICON_Y, w: ICON, h: ICON } };
     });
   }

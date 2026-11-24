@@ -1,9 +1,13 @@
 // 20 картинок пазлов 640×480 (spec.md, «Пазлы»), пока нет картинок из ChatGPT.
-// 16 — машина смотрит влево, природа; 25 — машина смотрит вправо и работает, стройка.
+// 16 — машина смотрит влево, природа; 25 — машина смотрит вправо и работает, стройка;
+// 36 — машина смотрит влево на готовую постройку (machine.puzzles[36].object), рисуются её слои.
 import { machines } from '../machines/index.js';
 import { drawWithLoad } from '../machines/pogruzchik.js';
 import { TAU, box } from '../parts-common.js';
 import * as S from './scenery.js';
+import { art as objectArt } from '../objects/index.js';
+import objectsData from '../../data/objects/index.js';
+import contentData from '../../data/index.js';
 
 const { PW, PH } = S;
 
@@ -332,8 +336,42 @@ const P = {
   'bashennyi-kran': [n10Kran, s10Kran],
 };
 
+// ---------------- 36: рядом с готовой постройкой, смотрит влево ----------------
+
+function finished(objectId) {
+  const o = objectsData.find((x) => x.id === objectId);
+  const layers = [];
+  if (o) for (const st of o.steps) if (st.layer && !layers.includes(st.layer)) layers.push(st.layer);
+  return layers.map((l) => objectArt['object/' + objectId + '/layer/' + l]).filter(Boolean);
+}
+
+function postroika(machineId, objectId, seed) {
+  return (g) => {
+    const r = S.rng(seed);
+    // горизонт высоко: небо — только верхняя четверть, остальное — постройка, машина и луг
+    S.sky(g, '#5fc0ff', '#e6f7ff', 200);
+    S.sun(g, 600, 40, 26);
+    for (let i = 0; i < 3; i++) S.cloud(g, 20 + i * 200 + r() * 60, 20 + r() * 50, 0.45 + r() * 0.3);
+    S.hills(g, 150, '#9bd77a', 12, seed % 7);
+    S.ground(g, 170, '#8fcf6a', '#6fb24f');
+    S.tufts(g, r, 170, 478, 30);
+    for (let i = 0; i < 8; i++) S.stemFlower(g, r() * PW, 200 + r() * 270, 12 + r() * 10, ['#ff6fa0', '#ffd23f', '#ffffff', '#b58cff'][i % 4]);
+    S.bush(g, 600, 230, 0.7); S.tree(g, 40, 215, 0.6);
+    // постройка слева, крупно: слой 600×440, земля внутри слоя y=340 → на линии 455
+    const k = 1.0;
+    g.save(); g.translate(-40, 455 - 340 * k); g.scale(k, k);
+    for (const L of finished(objectId)) { g.save(); L.draw(g, 600, 440); g.restore(); }
+    g.restore();
+    place(g, machineId, { facing: 'left', cx: 500, gy: 468, maxW: 260, maxH: 220 });
+  };
+}
+
 export const art = {};
+let seed36 = 31;
 for (const id of Object.keys(P)) {
   art['puzzle/' + id + '/16'] = { w: PW, h: PH, draw: P[id][0] };
   art['puzzle/' + id + '/25'] = { w: PW, h: PH, draw: P[id][1] };
+  const md = contentData.machines.find((m) => m.id === id);
+  const obj = md && md.puzzles && md.puzzles[36] && md.puzzles[36].object;
+  art['puzzle/' + id + '/36'] = { w: PW, h: PH, draw: postroika(id, obj, seed36++) };
 }

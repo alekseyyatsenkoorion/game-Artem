@@ -313,7 +313,7 @@ const MACHINES_E2E = await (async () => {
       await page.waitForFunction(() => window.__stroika.scenes.currentScene().mode === 'big', null, { timeout: 5000 });
       assert((await cur(page, 's.selected')) === id, 'крупно не та машина');
       const icons = await cur(page, 's.icons.map((i) => i.scene + (i.params && i.params.size ? i.params.size : ""))');
-      for (const need of ['assembly', 'puzzle16', 'puzzle25', 'wash']) assert(icons.includes(need), id + ': нет значка ' + need);
+      for (const need of ['assembly', 'puzzle16', 'puzzle25', 'puzzle36', 'wash']) assert(icons.includes(need), id + ': нет значка ' + need);
       if (n === 0 || n === 9) await shot(page, '05-garazh-krupno-' + id);
       // тык мимо машины и значков — назад к ряду
       await tap(cdp, 980, 140);
@@ -321,7 +321,7 @@ const MACHINES_E2E = await (async () => {
     }
   });
 
-  await check('3.4', 'Пазлы: все 20 пазлов собираются касаниями; 25 закрыт, пока не собран 16; сохраняются', async () => {
+  await check('3.4', 'Пазлы: все 30 пазлов (16, 25, 36) собираются касаниями; 25 закрыт без 16, 36 — без 25; сохраняются', async () => {
     await inGarage(page);
     // 2.37 в браузере: пазл 25 у несобранного 16 закрыт
     await page.evaluate(() => window.__stroika.scenes.open('puzzle', { machine: 'traktor', size: 25 }));
@@ -329,9 +329,14 @@ const MACHINES_E2E = await (async () => {
     await sleep(300);
     assert((await cur(page, 's.state')) === 'locked', 'пазл 25 открыт без 16');
     await waitScene(page, 'garage', 8000);
+    await page.evaluate(() => window.__stroika.scenes.open('puzzle', { machine: 'traktor', size: 36 }));
+    await waitScene(page, 'puzzle');
+    await sleep(300);
+    assert((await cur(page, 's.state')) === 'locked', 'пазл 36 открыт без 25');
+    await waitScene(page, 'garage', 8000);
     let n = 0;
     for (const id of MACHINES_E2E) {
-      for (const size of [16, 25]) {
+      for (const size of [16, 25, 36]) {
         const ok = await runFromGarage(page, cdp, 'puzzle', { machine: id, size }, async (p, c) => {
           // полпазла, выход крестиком, возврат — продолжение с того же места (2.8)
           if (n === 0) {

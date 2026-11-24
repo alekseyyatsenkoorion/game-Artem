@@ -26,6 +26,7 @@ export default {
   puzzles: {
     16: { facing: 'left', scene: 'nature' },
     25: { facing: 'right', scene: 'stroika' },
+    36: { facing: 'left', scene: 'postroika', object: 'parking' }, // рядом с готовой постройкой
   },
   sounds: {
     engine: { base: 66 },
