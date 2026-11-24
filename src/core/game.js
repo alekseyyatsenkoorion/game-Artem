@@ -64,6 +64,8 @@ export class Game {
     // iOS: звуки Web Audio и голос молчат при беззвучном режиме планшета. Тихий звук через <audio>,
     // запущенный касанием, переводит игру в режим «проигрыватель», и звук слышен как в видео.
     this.audio.onGesture = () => this._mediaUnlock();
+    this.audio.setMusic(this.progress.setting('music') !== false);
+    this.progress.on('change', (ev) => { if (ev && ev.type === 'setting' && ev.name === 'music') this.audio.setMusic(this.progress.setting('music') !== false); });
     this.ui = new CoreUI({ assets: this.assets });
 
     this.scenes = new SceneManager({
@@ -172,11 +174,13 @@ export class Game {
       if (this.media) { try { this.media.pause(); } catch (e) { /* ничего */ } }
       this.hidden = true;
       this.input.cancelAll();
+      this.audio.pauseMusic(true);
       this.scenes.pause();
       this.timer.persist();
     } else {
       this.hidden = false;
       this.last = 0;
+      this.audio.pauseMusic(false);
       this.scenes.resume();
     }
   }
