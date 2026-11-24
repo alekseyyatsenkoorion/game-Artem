@@ -72,6 +72,8 @@ export function buildFixture({ objects = 'fixture' } = {}) {
       if (!art[k]) art[k] = box(m.size.w, m.size.h);
     }
     for (const p of m.parts) if (!art['machine/' + m.id + '/part/' + p.id]) art['machine/' + m.id + '/part/' + p.id] = box(p.w, p.h);
+    // картинка к факту (рисует зона «Контент»; пока её нет — прямоугольник 360×260)
+    if (!art['fact/' + m.id]) art['fact/' + m.id] = box(360, 260, '#7bc4e8');
   }
   const objs = objects === 'real' ? realData.objects : fixtureObjects(machines);
   for (const o of objs) {
