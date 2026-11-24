@@ -31,6 +31,8 @@ export class Audio {
 
   // ---------- включение ----------
 
+  // Вызывается ядром на каждом касании (touchstart, touchend, pointerdown). iOS считает «жестом»
+  // не каждое из них, поэтому включение повторяется, пока звук и голос действительно не заработают.
   unlock() {
     if (!this.ac) {
       try {
@@ -48,22 +50,32 @@ export class Audio {
         this.ac = null;
       }
     }
+    const running = this.ac && this.ac.state === 'running';
     try {
-      if (this.ac && this.ac.state !== 'running' && this.ac.resume) this.ac.resume();
-      // iOS включает звук только если в жесте прозвучал хоть какой-то звук
-      if (this.ac && !this.unlocked) {
+      if (this.ac && !running) {
+        if (this.ac.resume) { const p = this.ac.resume(); if (p && p.catch) p.catch(() => {}); }
+        // iOS включает звук только если в жесте прозвучал хоть какой-то звук
         const b = this.ac.createBuffer(1, 1, 22050);
         const s = this.ac.createBufferSource();
         s.buffer = b; s.connect(this.ac.destination); s.start(0);
       }
     } catch (e) { /* ничего */ }
+    if (this.onGesture) { try { this.onGesture(); } catch (e) { /* ничего */ } }
+    // Голос: первая фраза должна прозвучать внутри настоящего жеста — «грунтуем» на нескольких первых касаниях.
+    this.primes = (this.primes || 0) + 1;
+    if (this.primes <= 4 && this.voices && this.voices.prime) {
+      try { this.voices.prime(); } catch (e) { /* ничего */ }
+    }
     if (!this.unlocked) {
       this.unlocked = true;
-      if (this.voices && this.voices.prime) {
-        try { this.voices.prime(); } catch (e) { /* ничего */ }
-      }
       this._next();
     }
+  }
+
+  // Состояние звука для экрана взрослых.
+  soundState() {
+    if (!this.ac) return 'нет';
+    return this.ac.state || 'неизвестно';
   }
 
   // ---------- звуки ----------
@@ -237,8 +249,9 @@ export class Audio {
   }
 
   voiceInfo() {
-    if (!this.voices) return 'нет';
-    try { return this.voices.info(); } catch (e) { return 'неизвестно'; }
+    const snd = ' · звук: ' + this.soundState();
+    if (!this.voices) return 'нет' + snd;
+    try { return this.voices.info() + snd; } catch (e) { return 'неизвестно' + snd; }
   }
 }
 
@@ -382,7 +395,10 @@ export function createSpeechVoices(win) {
   return {
     prime() {
       // первая фраза должна прозвучать внутри касания — иначе iOS не включит голос
-      try { const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU'; ss.speak(u); } catch (e) { /* ничего */ }
+      try {
+        if (ss.paused && ss.resume) ss.resume();
+        const u = new Utt(' '); u.volume = 0; u.lang = 'ru-RU'; ss.speak(u);
+      } catch (e) { /* ничего */ }
     },
     speak(text) {
       if (!voice) pick();
