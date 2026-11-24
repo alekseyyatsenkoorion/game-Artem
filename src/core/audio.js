@@ -2,6 +2,11 @@
 // Звуки техники создаются кодом (Web Audio), голос — файл фразы из assets/audio/,
 // если он есть, иначе встроенный русский голос устройства.
 import { logError } from './draw-utils.js';
+import { Music } from './music.js';
+
+// Громкость фоновой музыки: тихо, ниже звуков машин. Под голосом — ещё тише.
+export const MUSIC_LEVEL = 0.07;
+const MUSIC_DUCK = 0.35;
 
 const FX_IDS = ['fx/snap', 'fx/water', 'fx/foam', 'fx/pump', 'fx/dig', 'fx/pour', 'fx/win', 'fx/splash'];
 
@@ -27,6 +32,43 @@ export class Audio {
     this.lastPraise = null;
     this.factIndex = {};
     this.spoken = [];     // журнал сказанного (для тестов и родительского экрана)
+    this.musicBus = null; // уровень музыки
+    this.music = null;    // Music, пока играет
+    this.musicOn = true;  // настройка взрослого
+    this.musicPaused = false; // игра свёрнута
+    this.musicTimers = undefined; // подмена таймеров в тестах
+  }
+
+  // ---------- музыка ----------
+
+  // Включить или выключить фоновую музыку (настройка на экране для взрослых).
+  setMusic(on) {
+    this.musicOn = !!on;
+    this._updateMusic();
+  }
+
+  // Игра свёрнута — музыка молчит; развернули — играет дальше.
+  pauseMusic(flag) {
+    this.musicPaused = !!flag;
+    this._updateMusic();
+  }
+
+  musicPlaying() { return !!(this.music && this.music.playing()); }
+
+  _updateMusic() {
+    const want = this.musicOn && !this.muted && !this.musicPaused && !!this.ac && !!this.musicBus;
+    try {
+      if (want && !this.music) {
+        this.music = new Music(this.ac, this.musicBus, this.musicTimers);
+        this.music.start();
+      } else if (!want && this.music) {
+        this.music.stop();
+        this.music = null;
+      }
+    } catch (e) {
+      logError('Audio', 'сбой музыки', e);
+      this.music = null;
+    }
   }
 
   // ---------- включение ----------
@@ -44,6 +86,9 @@ export class Audio {
           this.sfx = this.ac.createGain();
           this.sfx.gain.value = 1;
           this.sfx.connect(this.master);
+          this.musicBus = this.ac.createGain();
+          this.musicBus.gain.value = MUSIC_LEVEL;
+          this.musicBus.connect(this.master);
         }
       } catch (e) {
         logError('Audio', 'Web Audio недоступен', e);
@@ -72,6 +117,7 @@ export class Audio {
       this.unlocked = true;
       this._next();
     }
+    if (!this.music) this._updateMusic();
   }
 
   // Состояние звука для экрана взрослых.
@@ -210,6 +256,9 @@ export class Audio {
   _duck(on) {
     if (!this.sfx || !this.ac) return;
     try { this.sfx.gain.setTargetAtTime(on ? 0.5 : 1, this.ac.currentTime, 0.05); } catch (e) { /* ничего */ }
+    if (this.musicBus) {
+      try { this.musicBus.gain.setTargetAtTime(MUSIC_LEVEL * (on ? MUSIC_DUCK : 1), this.ac.currentTime, 0.15); } catch (e) { /* ничего */ }
+    }
   }
 
   isSpeaking() { return !!this.current; }
@@ -248,6 +297,7 @@ export class Audio {
     if (this.master && this.ac) {
       try { this.master.gain.setValueAtTime(this.muted ? 0 : 1, this.ac.currentTime); } catch (e) { this.master.gain.value = this.muted ? 0 : 1; }
     }
+    this._updateMusic();
   }
 
   voiceInfo() {

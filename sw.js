@@ -2,9 +2,32 @@
 // Новая версия скачивается в фоне целиком и включается при следующем запуске.
 // Блок между метками заполняет tools/build.mjs при выкладке — руками не правится.
 // BUILD:START
-const VERSION = "1.4";
+const VERSION = "1.5";
 const FILES = [
+  "assets/gpt/bg-garazh.webp",
+  "assets/gpt/bg-masterskaya.webp",
+  "assets/gpt/bg-moika.webp",
   "assets/gpt/manifest.json",
+  "assets/gpt/puzzle-01-samosval-16.webp",
+  "assets/gpt/puzzle-01-samosval-25.webp",
+  "assets/gpt/puzzle-02-traktor-16.webp",
+  "assets/gpt/puzzle-02-traktor-25.webp",
+  "assets/gpt/puzzle-03-buldozer-16.webp",
+  "assets/gpt/puzzle-03-buldozer-25.webp",
+  "assets/gpt/puzzle-04-katok-16.webp",
+  "assets/gpt/puzzle-04-katok-25.webp",
+  "assets/gpt/puzzle-05-betonomeshalka-16.webp",
+  "assets/gpt/puzzle-05-betonomeshalka-25.webp",
+  "assets/gpt/puzzle-06-ekskavator-16.webp",
+  "assets/gpt/puzzle-06-ekskavator-25.webp",
+  "assets/gpt/puzzle-07-pogruzchik-16.webp",
+  "assets/gpt/puzzle-07-pogruzchik-25.webp",
+  "assets/gpt/puzzle-08-avtokran-16.webp",
+  "assets/gpt/puzzle-08-avtokran-25.webp",
+  "assets/gpt/puzzle-09-greider-16.webp",
+  "assets/gpt/puzzle-09-greider-25.webp",
+  "assets/gpt/puzzle-10-bashennyi-kran-16.webp",
+  "assets/gpt/puzzle-10-bashennyi-kran-25.webp",
   "icon-180.png",
   "icon-192.png",
   "icon-512.png",
@@ -44,6 +67,7 @@ const FILES = [
   "src/core/draw-utils.js",
   "src/core/game.js",
   "src/core/input.js",
+  "src/core/music.js",
   "src/core/parent-timer.js",
   "src/core/progress.js",
   "src/core/scene-manager.js",

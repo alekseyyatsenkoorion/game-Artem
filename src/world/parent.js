@@ -23,7 +23,7 @@ export class ParentScene extends Scene {
     this.confirmReset = 0;
     this.toast = '';
     this.toastT = 0;
-    const y1 = 210, y2 = 330, y3 = 440, y4 = 550;
+    const y1 = 190, y2 = 290, y3 = 390, y4 = 490, y5 = 590;
     this.buttons = [
       { id: 'min-15', x: 120, y: y1, w: 180, h: 80, label: '15 минут' },
       { id: 'min-30', x: 320, y: y1, w: 180, h: 80, label: '30 минут' },
@@ -32,7 +32,8 @@ export class ParentScene extends Scene {
       { id: 'test', x: 120, y: y2, w: 784, h: 80, label: 'Проверка таймера: машины уснут через 1 минуту' },
       { id: 'unlock-all', x: 120, y: y3, w: 384, h: 80, label: 'Открыть все машины' },
       { id: 'reset', x: 520, y: y3, w: 384, h: 80, label: 'Сбросить прогресс' },
-      { id: 'close', x: 120, y: y4, w: 784, h: 80, label: 'Вернуться в игру' },
+      { id: 'music', x: 120, y: y4, w: 784, h: 80, label: 'Музыка' },
+      { id: 'close', x: 120, y: y5, w: 784, h: 80, label: 'Вернуться в игру' },
     ];
   }
 
@@ -63,6 +64,10 @@ export class ParentScene extends Scene {
       } else {
         this.confirmReset = CONFIRM_TIME;
       }
+    } else if (id === 'music') {
+      const on = progress.setting('music') === false;
+      progress.setSetting('music', on);
+      this._say(on ? 'Музыка включена' : 'Музыка выключена');
     } else if (id === 'close') {
       scenes.back();
     }
@@ -93,7 +98,7 @@ export class ParentScene extends Scene {
     g.fillStyle = '#1d2733';
     g.font = 'bold 40px ' + FONT;
     g.textAlign = 'left';
-    g.fillText('Для взрослых', 120, 60);
+    g.fillText('Для взрослых', 120, 56);
 
     g.font = '26px ' + FONT;
     g.fillStyle = '#44505e';
@@ -101,7 +106,7 @@ export class ParentScene extends Scene {
     if (timer.isTestRun()) status = 'Идёт проверка таймера: осталось ' + fmt(timer.remaining());
     else if (timer.minutes() === 0) status = 'Таймер выключен';
     else status = 'Таймер игры. Осталось ' + fmt(timer.remaining());
-    g.fillText(status, 120, 160);
+    g.fillText(status, 120, 140);
 
     const current = 'min-' + timer.minutes();
     for (const b of this.buttons) {
@@ -113,24 +118,25 @@ export class ParentScene extends Scene {
       g.fillStyle = selected || isReset ? '#ffffff' : '#1d2733';
       g.font = (b.w < 200 ? '28px ' : '28px ') + FONT;
       g.textAlign = 'center';
-      g.fillText(isReset ? 'Нажмите ещё раз, чтобы стереть' : b.label, b.x + b.w / 2, b.y + b.h / 2 + 1);
+      const label = b.id === 'music' ? 'Музыка: ' + (this.ctx.progress.setting('music') === false ? 'выключена (нажмите, чтобы включить)' : 'включена (нажмите, чтобы выключить)') : b.label;
+      g.fillText(isReset ? 'Нажмите ещё раз, чтобы стереть' : label, b.x + b.w / 2, b.y + b.h / 2 + 1);
     }
 
     g.textAlign = 'left';
     g.font = '22px ' + FONT;
     g.fillStyle = '#5d6977';
-    g.fillText('Версия игры: ' + version, 120, 676);
-    g.fillText('Голос: ' + audio.voiceInfo(), 120, 710);
-    g.fillText('Открыть этот экран: два пальца в верхних углах, 3 секунды.', 120, 744);
+    g.fillText('Версия игры: ' + version, 120, 696);
+    g.fillText('Голос: ' + audio.voiceInfo(), 120, 724);
+    g.fillText('Открыть этот экран: два пальца в верхних углах, 3 секунды.', 120, 752);
 
     if (this.toastT > 0) {
       g.globalAlpha = Math.min(1, this.toastT * 2);
       g.fillStyle = '#1d2733';
-      roundRect(g, 262, 640, 500, 64, 32); g.fill();
+      roundRect(g, 262, 686, 500, 64, 32); g.fill();
       g.fillStyle = '#ffffff';
       g.textAlign = 'center';
       g.font = '24px ' + FONT;
-      g.fillText(this.toast, 512, 673);
+      g.fillText(this.toast, 512, 719);
       g.globalAlpha = 1;
     }
   }

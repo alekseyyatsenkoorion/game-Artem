@@ -564,3 +564,17 @@ test('5.3 гараж: неподвижный ряд запечён в одну �
   w.scenes.back();
   assert.equal(w.assets.cache.has('garage/layer'), false); // освобождён при выходе
 });
+
+test('экран для взрослых: кнопка «Музыка» выключает и включает музыку, настройка переживает сброс прогресса', async () => {
+  const w = await world();
+  await w.scenes.open('parent');
+  assert.notEqual(w.progress.setting('music'), false); // по умолчанию музыка есть
+  press(w, 'music');
+  assert.equal(w.progress.setting('music'), false);
+  press(w, 'reset'); press(w, 'reset');
+  assert.equal(w.progress.setting('music'), false);
+  press(w, 'music');
+  assert.equal(w.progress.setting('music'), true);
+  const s = w.scenes.currentScene();
+  for (const b of s.buttons) assert.ok(b.y + b.h <= 768 && b.y >= 96, b.id + ' вне экрана');
+});
