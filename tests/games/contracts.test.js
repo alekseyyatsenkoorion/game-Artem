@@ -51,8 +51,8 @@ function spyPlay(w) {
   return handles;
 }
 
-test('index.js регистрирует сборку, пазл, мойку, мастерскую, заправку', () => {
-  assert.deepEqual(registered.map((S) => S.id), ['assembly', 'puzzle', 'wash', 'repair', 'fuel']);
+test('index.js регистрирует сборку, пазл, мойку, мастерскую, заправку, канат', () => {
+  assert.deepEqual(registered.map((S) => S.id), ['assembly', 'puzzle', 'wash', 'repair', 'fuel', 'tug']);
 });
 
 for (const machine of MACHINES) {

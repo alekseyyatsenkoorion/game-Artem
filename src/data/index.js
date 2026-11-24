@@ -1,4 +1,4 @@
-// Данные контента (contracts.md, раздел 8). Этап 2: 10 машин; объекты стройки — на этапе 3.
+// Данные контента (contracts.md, раздел 8): 10 машин и 10 объектов стройки.
 import samosval from './machines/samosval.js';
 import traktor from './machines/traktor.js';
 import buldozer from './machines/buldozer.js';
@@ -9,6 +9,7 @@ import pogruzchik from './machines/pogruzchik.js';
 import avtokran from './machines/avtokran.js';
 import greider from './machines/greider.js';
 import bashennyiKran from './machines/bashennyi-kran.js';
+import { objects } from './objects/index.js';
 import { phrases } from './phrases.js';
 import { praises, praiseTexts } from './praises.js';
 import { factTexts } from './facts.js';
@@ -19,7 +20,7 @@ export const childName = 'Артём';
 export const data = {
   childName,
   machines: [samosval, traktor, buldozer, katok, betonomeshalka, ekskavator, pogruzchik, avtokran, greider, bashennyiKran],
-  objects: [],
+  objects,
   phrases: Object.assign({}, phrases, praiseTexts, factTexts),
   praises,
 };

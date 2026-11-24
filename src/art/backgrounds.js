@@ -261,6 +261,122 @@ function drawFuel(g) {
   for (let x = 380; x < W; x += 130) g.fillRect(x, 720, 70, 10);
 }
 
+
+// ---------- фоны этапа 3 ----------
+
+// Стройка: пустая площадка. Земля (трава) на y = 600 по всей ширине, ниже — разрез грунта:
+// туда опускаются котлованы слоёв объекта (линия земли слоя y = 340 совпадает с y = 600 экрана).
+function drawBuild(g) {
+  sky(g, '#7fd0ff', '#e3f6ff', 600);
+  g.fillStyle = 'rgba(255,243,160,0.35)'; g.beginPath(); g.arc(900, 100, 78, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#fff3a0'; g.beginPath(); g.arc(900, 100, 54, 0, Math.PI * 2); g.fill();
+  cloud(g, 200, 140, 0.9); cloud(g, 560, 90, 0.7); cloud(g, 720, 200, 0.55);
+  // далёкий город
+  g.fillStyle = '#b9d9ec';
+  for (const [x, w, h] of [[40, 60, 150], [110, 44, 210], [160, 70, 120], [250, 50, 180], [700, 60, 170], [770, 46, 230], [830, 80, 140], [930, 54, 190]]) g.fillRect(x, 560 - h, w, h);
+  g.fillStyle = '#d4e8f4';
+  for (const [x, w, h] of [[40, 60, 150], [110, 44, 210], [250, 50, 180], [770, 46, 230], [930, 54, 190]]) {
+    for (let yy = 560 - h + 16; yy < 540; yy += 26) for (let xx = x + 8; xx < x + w - 10; xx += 16) g.fillRect(xx, yy, 7, 10);
+  }
+  hills(g, 560, '#a9dd8a', 16, 5);
+  // забор стройки вдалеке
+  g.fillStyle = '#f0a54a';
+  g.fillRect(0, 566, W, 8);
+  for (let x = 10; x < W; x += 46) g.fillRect(x, 548, 8, 40);
+  g.fillStyle = '#93cf6b'; g.fillRect(0, 580, W, 22);
+  // грунт в разрезе
+  g.fillStyle = '#b77d45'; g.fillRect(0, 610, W, 158);
+  g.fillStyle = '#a56d3a'; g.fillRect(0, 690, W, 78);
+  g.fillStyle = '#93602f'; g.fillRect(0, 740, W, 28);
+  let s = 11;
+  const rnd = () => { s = (s * 9301 + 49297) % 233280; return s / 233280; };
+  for (let i = 0; i < 70; i++) {
+    g.fillStyle = i % 3 ? 'rgba(80,50,20,0.35)' : 'rgba(255,230,190,0.35)';
+    g.beginPath(); g.ellipse(rnd() * W, 620 + rnd() * 140, 4 + rnd() * 8, 3 + rnd() * 4, 0, 0, Math.PI * 2); g.fill();
+  }
+  // трава по линии земли
+  g.fillStyle = '#6cc04a'; g.fillRect(0, 598, W, 14);
+  g.fillStyle = '#4fa83a';
+  for (let x = 0; x < W; x += 12) { g.beginPath(); g.moveTo(x, 600); g.lineTo(x + 6, 588 - (x % 36 === 0 ? 6 : 0)); g.lineTo(x + 12, 600); g.closePath(); g.fill(); }
+  g.fillRect(0, 608, W, 4);
+  // конусы по краям
+  for (const x of [50, 980]) {
+    g.fillStyle = '#ff7a1a';
+    g.beginPath(); g.moveTo(x - 22, 604); g.lineTo(x, 546); g.lineTo(x + 22, 604); g.closePath(); g.fill();
+    g.fillStyle = '#fff'; g.fillRect(x - 12, 570, 24, 8);
+  }
+}
+
+function mapTree(g, x, y, s) {
+  g.fillStyle = '#8a5a2b'; g.fillRect(x - 5 * s, y - 20 * s, 10 * s, 22 * s);
+  g.fillStyle = '#3f9a33'; g.beginPath(); g.arc(x, y - 34 * s, 22 * s, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#58b444'; g.beginPath(); g.arc(x - 6 * s, y - 40 * s, 12 * s, 0, Math.PI * 2); g.fill();
+}
+
+// Карта-дорожка: спокойный пейзаж (луг, холмы, речка, деревья). Саму дорогу рисует сцена.
+function drawMap(g) {
+  sky(g, '#7fd0ff', '#d9f2ff', 220);
+  cloud(g, 300, 70, 0.7); cloud(g, 620, 50, 0.6); cloud(g, 860, 110, 0.5);
+  hills(g, 190, '#a9dd8a', 26, 0.5);
+  hills(g, 240, '#93d070', 20, 2.2);
+  g.fillStyle = '#8dcc66'; g.fillRect(0, 260, W, H - 260);
+  // светлые полосы луга
+  g.fillStyle = '#9ad574';
+  for (let y = 300; y < H; y += 90) { g.beginPath(); g.ellipse(((y * 7) % W), y, 260, 26, 0, 0, Math.PI * 2); g.fill(); }
+  // речка
+  g.strokeStyle = '#2f86c8'; g.lineWidth = 56; g.lineCap = 'round';
+  const river = () => { g.beginPath(); g.moveTo(1060, 300); g.bezierCurveTo(820, 340, 900, 520, 640, 560); g.bezierCurveTo(420, 590, 380, 700, 120, 800); };
+  river(); g.stroke();
+  g.strokeStyle = '#4fb3f0'; g.lineWidth = 44; river(); g.stroke();
+  g.strokeStyle = 'rgba(255,255,255,0.6)'; g.lineWidth = 4;
+  for (const [x, y] of [[880, 400], [700, 545], [460, 610], [300, 700]]) { g.beginPath(); g.moveTo(x - 14, y); g.lineTo(x + 14, y); g.stroke(); }
+  // рощи
+  for (const [x, y, s] of [[160, 300, 1], [200, 320, 0.8], [130, 330, 0.9], [560, 290, 0.8], [600, 300, 1], [960, 520, 1], [920, 560, 0.8], [990, 600, 0.9], [60, 520, 1], [100, 560, 0.8], [520, 720, 0.9], [760, 720, 1], [810, 740, 0.8], [330, 420, 0.8]]) mapTree(g, x, y, s);
+  // цветы
+  const cols = ['#ff6fa8', '#ffcf3a', '#ffffff', '#b36bff'];
+  let s = 5;
+  for (let i = 0; i < 80; i++) {
+    s = (s * 9301 + 49297) % 233280; const x = (s / 233280) * W;
+    s = (s * 9301 + 49297) % 233280; const y = 280 + (s / 233280) * 480;
+    g.fillStyle = cols[i % 4]; g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill();
+  }
+}
+
+// Перетягивание каната: поле, по центру на земле лужа (центр около y = 560).
+function drawTug(g) {
+  sky(g, '#7fd0ff', '#e3f6ff', 480);
+  g.fillStyle = '#fff3a0'; g.beginPath(); g.arc(880, 100, 50, 0, Math.PI * 2); g.fill();
+  cloud(g, 240, 120, 0.8); cloud(g, 600, 80, 0.7);
+  hills(g, 440, '#a9dd8a', 20, 1.5);
+  hills(g, 480, '#93d070', 14, 3.1);
+  g.fillStyle = '#7cc45a'; g.fillRect(0, 500, W, H - 500);
+  g.fillStyle = '#6cb64c';
+  for (let x = 0; x < W; x += 14) { g.beginPath(); g.moveTo(x, 504); g.lineTo(x + 7, 494); g.lineTo(x + 14, 504); g.closePath(); g.fill(); }
+  // утоптанная полоса, где стоят машины
+  g.fillStyle = '#c9a46a'; g.fillRect(0, 590, W, 40);
+  g.fillStyle = '#b48d55'; g.fillRect(0, 624, W, 6);
+  // лужа
+  g.fillStyle = '#6b4a2a'; g.beginPath(); g.ellipse(512, 566, 170, 46, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#8a6a44'; g.beginPath(); g.ellipse(512, 562, 150, 36, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(160, 200, 230, 0.55)'; g.beginPath(); g.ellipse(500, 556, 110, 22, 0, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 4; g.lineCap = 'round';
+  for (const [x, y, w] of [[450, 552, 40], [560, 566, 30], [520, 546, 18]]) { g.beginPath(); g.moveTo(x, y); g.lineTo(x + w, y); g.stroke(); }
+  // брызги грязи вокруг
+  g.fillStyle = '#6b4a2a';
+  for (const [x, y, r] of [[330, 590, 10], [700, 592, 12], [360, 540, 6], [672, 538, 7], [300, 560, 5], [730, 566, 6]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
+  // флажки по краям поля
+  for (const [x, c] of [[110, '#e8412c'], [914, '#2f7de1']]) {
+    g.fillStyle = '#5a5f6b'; g.fillRect(x - 3, 420, 6, 110);
+    g.fillStyle = c; g.beginPath(); g.moveTo(x + 3, 424); g.lineTo(x + 54, 440); g.lineTo(x + 3, 458); g.closePath(); g.fill();
+  }
+  // цветы на переднем плане
+  const cols = ['#ff6fa8', '#ffcf3a', '#ffffff'];
+  for (let i = 0; i < 30; i++) {
+    const x = (i * 137) % W, y = 660 + ((i * 53) % 100);
+    g.fillStyle = cols[i % 3]; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill();
+  }
+}
+
 export const art = {
   'bg/home': { w: W, h: H, draw: drawHome },
   'bg/assembly': { w: W, h: H, draw: drawAssembly },
@@ -270,4 +386,7 @@ export const art = {
   'bg/wash': { w: W, h: H, draw: drawWash },
   'bg/repair': { w: W, h: H, draw: drawRepair },
   'bg/fuel': { w: W, h: H, draw: drawFuel },
+  'bg/build': { w: W, h: H, draw: drawBuild },
+  'bg/map': { w: W, h: H, draw: drawMap },
+  'bg/tug': { w: W, h: H, draw: drawTug },
 };

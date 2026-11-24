@@ -1,25 +1,28 @@
-// Гараж (spec.md, раздел 4 «Гараж»; раздел 8 «Временное правило этапа 2»).
+// Гараж (spec.md, раздел 4 «Гараж»).
 // Все машины на своих местах: закрытые — силуэтом, открытые несобранные — кучкой деталей,
 // собранные — целиком. Тык по собранной: она выезжает крупно, голос называет её и говорит факт,
-// вокруг значки мини-игр. Про конкретные машины здесь ничего нет: всё из ctx.data.machines.
+// вокруг три значка: собрать заново, пазл (16 и 25), помыть. Про конкретные машины здесь ничего нет:
+// всё из ctx.data.machines. Машины открывает стройка (Progress.completeObject), не гараж.
+// Режим выбора для каната: params {mode: 'tug'} — тык по открытой машине открывает канат с ней;
+// проигравшая машина едет на мойку, потом снова выбор.
 import { Scene } from '../core/scene.js';
 import { IdleHint, drawHand, drawGlowRect } from '../core/ui.js';
 import { roundRect, inRect, easeOut, easeInOut, lerp } from '../core/draw-utils.js';
 import contentData from '../data/index.js';
 
-// Сцены, которые гараж открывает на этапе 2. Значок показывается, только если сцена зарегистрирована.
-export const STAGE2_SCENES = ['assembly', 'puzzle', 'wash', 'repair', 'fuel'];
+// Сцены, которые открывает гараж. Значок показывается, только если сцена зарегистрирована.
+// Мастерская и заправка — остановки на карте, в гараже их нет.
+export const GARAGE_SCENES = ['assembly', 'puzzle', 'wash'];
 
-// Значки вокруг крупной машины. Мастерская и заправка — временно для этапа 2 (spec.md, раздел 8);
-// на этапе 3 они переедут на карту.
+// Значки вокруг крупной машины.
 export const ICONS = [
   { icon: 'ui/icon-assembly', scene: 'assembly' },
   { icon: 'ui/icon-puzzle16', scene: 'puzzle', size: 16 },
   { icon: 'ui/icon-puzzle25', scene: 'puzzle', size: 25 },
   { icon: 'ui/icon-wash', scene: 'wash' },
-  { icon: 'ui/icon-repair', scene: 'repair' },
-  { icon: 'ui/icon-fuel', scene: 'fuel' },
 ];
+
+const TO_WASH_DELAY = 2.2; // проиграл канат: голос «поехали на мойку», потом мойка
 
 const COLS = 5;
 const SLOT_W = 184, SLOT_GAP = 12;
@@ -60,8 +63,10 @@ export class GarageScene extends Scene {
     return ids;
   }
 
-  enter() {
+  enter(params) {
     const { ctx } = this;
+    this.tugMode = !!(params && params.mode === 'tug');
+    this.toWash = null; // {machine, t} — после проигрыша в канат
     this.machines = sortedMachines(ctx.data.machines);
     this.t = 0;
     this.mode = 'row'; // row | zoom | big | unzoom
@@ -77,13 +82,7 @@ export class GarageScene extends Scene {
     this._layout();
     this._refresh();
     this.unsubscribe = ctx.progress.on('change', () => { this.dirty = true; });
-    // Временное правило этапа 2: собранная машина открывает следующую. Догоняем, если машина
-    // была собрана раньше (например, в версии этапа 1), а следующая ещё не приехала.
-    for (let i = 0; i + 1 < this.machines.length; i++) {
-      const id = this.machines[i].id;
-      if (ctx.progress.isAssembled(id)) this._unlockNext(id, false);
-    }
-    this._refresh();
+    if (this.tugMode) ctx.audio.say('tug-pick');
   }
 
   exit() {
@@ -145,22 +144,23 @@ export class GarageScene extends Scene {
     return s ? s.machine : null;
   }
 
-  // Временное правило этапа 2: открыть следующую по порядку машину. Возвращает её id или null.
-  _unlockNext(id, announce) {
-    const i = this.machines.findIndex((m) => m.id === id);
-    const next = i >= 0 ? this.machines[i + 1] : null;
-    if (!next || this.ctx.progress.isUnlocked(next.id)) return null;
-    this.ctx.progress.unlock(next.id);
-    this.arrivals[next.id] = 0;
-    if (announce !== false) {
-      this.ctx.audio.play('horn/' + next.id);
-      this.ctx.audio.say('garage-new');
-    }
-    return next.id;
+  // Режим каната: первая открытая машина (для подсказки и e2e).
+  firstOpen() {
+    const s = this.slots.find((x) => x.state !== 'locked');
+    return s ? s.machine : null;
+  }
+
+  // Что ждём от ребёнка (для e2e): в режиме каната — тык по открытой машине.
+  get target() {
+    if (!this.tugMode || this.mode !== 'row' || this.toWash || this.pending) return null;
+    const id = this.firstOpen();
+    if (!id) return null;
+    const r = this._slotMachineRect(this._slot(id));
+    return { kind: 'tap', x: Math.round(r.x + r.w / 2), y: Math.round(r.y + r.h / 2) };
   }
 
   _makeIcons(id) {
-    const list = ICONS.filter((ic) => STAGE2_SCENES.includes(ic.scene) && this._hasScene(ic.scene));
+    const list = ICONS.filter((ic) => GARAGE_SCENES.includes(ic.scene) && this._hasScene(ic.scene));
     const total = list.length * ICON + Math.max(0, list.length - 1) * ICON_GAP;
     const x0 = Math.round((1024 - total) / 2);
     return list.map((ic, i) => {
@@ -230,12 +230,16 @@ export class GarageScene extends Scene {
   onPointer(e) {
     if (e.type !== 'down') return;
     this.hint.reset();
+    if (this.toWash) return;
     if (this.mode === 'row') {
       const s = this.slotAt(e.x, e.y);
       if (!s) return;
       if (s.state === 'locked') {
         this.shake[s.machine] = 0.5;
         this.ctx.audio.say('garage-locked');
+      } else if (this.tugMode) {
+        this.ctx.audio.play('horn/' + s.machine);
+        this._open('tug', { machine: s.machine }, 'row');
       } else if (s.state === 'parts') {
         this._open('assembly', { machine: s.machine }, 'row');
       } else {
@@ -263,13 +267,12 @@ export class GarageScene extends Scene {
     this.pending = null;
     this.hint.reset();
     this._refresh();
-    let arrived = null;
-    if (result && result.done && pending && pending.scene === 'assembly') {
-      arrived = this._unlockNext(result.machine || pending.machine);
-      this._refresh();
+    // канат проигран — машина в луже, едет на мойку
+    if (pending && pending.scene === 'tug' && result && result.done && result.won === false && this._hasScene('wash')) {
+      this.toWash = { machine: pending.machine, t: 0 };
+      this.ctx.audio.say('tug-to-wash');
     }
-    if (arrived || !pending || pending.from !== 'big' || !this.selected || this._slot(this.selected).state !== 'ready') {
-      // новая машина приехала — показываем ряд
+    if (!pending || pending.from !== 'big' || !this.selected || this._slot(this.selected).state !== 'ready') {
       this.selected = null;
       this.icons = [];
       this.mode = 'row';
@@ -290,6 +293,15 @@ export class GarageScene extends Scene {
       this.shake[k] -= dt;
       if (this.shake[k] <= 0) delete this.shake[k];
     }
+    if (this.toWash) {
+      this.toWash.t += dt;
+      if (this.toWash.t >= TO_WASH_DELAY) {
+        const m = this.toWash.machine;
+        this.toWash = null;
+        this._open('wash', { machine: m }, 'row');
+      }
+      return;
+    }
     for (const k of Object.keys(this.arrivals)) {
       this.arrivals[k] += dt;
       if (this.arrivals[k] >= ARRIVE_TIME) delete this.arrivals[k];
@@ -301,7 +313,7 @@ export class GarageScene extends Scene {
     const calm = (this.mode === 'row' || this.mode === 'big') && !Object.keys(this.arrivals).length;
     if (!calm) return;
     if (this.ctx.timer.checkpoint()) return;
-    if (this.hint.update(dt)) this.ctx.audio.say(this.mode === 'big' ? 'garage-actions' : 'garage-hint');
+    if (this.hint.update(dt)) this.ctx.audio.say(this.tugMode ? 'tug-pick' : this.mode === 'big' ? 'garage-actions' : 'garage-hint');
   }
 
   // ---------- рисование ----------
@@ -338,7 +350,7 @@ export class GarageScene extends Scene {
   draw(g) {
     const a = this.ctx.assets;
     g.drawImage(this._layer(), 0, 0, 1024, 768);
-    const wait = this.waiting();
+    const wait = this.tugMode ? null : this.waiting();
     if (wait && this.mode === 'row') {
       const r = this._slot(wait).rect;
       drawGlowRect(g, r.x + r.w / 2, r.y + r.h / 2 - 6, r.w - 34, r.h - 40, this.t);
@@ -373,6 +385,9 @@ export class GarageScene extends Scene {
         const r = this._slotMachineRect(this._slot(wait));
         const cx = r.x + r.w / 2, cy = r.y + r.h * 0.5;
         drawHand(g, a, cx, cy, cx, cy, this.hint.handPhase());
+      } else if (this.mode === 'row' && this.target) {
+        const tg = this.target;
+        drawHand(g, a, tg.x, tg.y, tg.x, tg.y, this.hint.handPhase());
       } else if (this.mode === 'big' && this.icons.length) {
         const r = this.icons[0].rect;
         drawHand(g, a, r.x + r.w / 2, r.y + r.h / 2, r.x + r.w / 2, r.y + r.h / 2, this.hint.handPhase());

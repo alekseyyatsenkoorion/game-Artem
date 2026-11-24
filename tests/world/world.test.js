@@ -1,82 +1,20 @@
 // Зона «Карта и стройка»: главный экран, гараж, экран для взрослых, «Машины спят».
-// Группа 0 (0.1, 0.2, 0.3, 0.4, 0.6, 0.11), логика гаража и временное правило этапа 2, 2.24, 2.33.
-// Тесты не зависят от готовности зоны «Контент»: если машин в данных меньше 10, добавляются
-// копии первой машины с другими id (своими фразами и картинками).
+// Группа 0 (0.1, 0.2, 0.3, 0.4, 0.6, 0.11), 3.1 (три входа), гараж и режим выбора для каната, 2.24, 2.33.
+// Машины открывает стройка: временное правило этапа 2 (собрал — открылась следующая) убрано.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { scenes as worldScenes } from '../../src/world/index.js';
 import { ENTRIES } from '../../src/world/home.js';
-import { STAGE2_SCENES } from '../../src/world/garage.js';
-import { Scene } from '../../src/core/scene.js';
-import realData from '../../src/data/index.js';
-import realArt from '../../src/art/index.js';
-import { UI_ART } from '../../src/core/ui.js';
+import { GARAGE_SCENES, ICONS } from '../../src/world/garage.js';
 import { CROSS_ZONE, rectsOverlap, inRect } from '../../src/core/draw-utils.js';
 import { makeWorld, fakeGraphics, captureErrors, tick } from '../core/helpers.js';
+import { buildFixture, stub, opened, perform } from './fixture.js';
 
-// ---------- тестовые данные: всегда 10 машин ----------
-
-const FALLBACK_PHRASES = {
-  'home-hint': '{name}, нажми на гараж!',
-  'home-closed': 'Сюда поедем потом!',
-  'garage-hint': '{name}, выбери машину!',
-  'garage-actions': 'Что будем делать? Собрать, пазл или помыть?',
-  'garage-new': 'Новая машина приехала! Давай её соберём!',
-  'garage-locked': 'Эта машина ещё не приехала. Собери другие машины!',
-  'puzzle-locked': 'Сначала собери маленький пазл!',
-};
-
-function buildFixture() {
-  const sorted = realData.machines.slice().sort((a, b) => a.order - b.order);
-  const base = sorted[0];
-  const machines = sorted.slice(0, 10);
-  const phrases = Object.assign({}, FALLBACK_PHRASES, realData.phrases);
-  const art = Object.assign({}, realArt, UI_ART);
-  for (let i = machines.length; i < 10; i++) {
-    const id = 'test-m' + (i + 1);
-    machines.push(Object.assign({}, base, {
-      id, order: i + 1, namePhrase: 'machine-' + id, nameAccPhrase: 'machine-' + id + '-acc',
-      facts: ['fact-' + id + '-1', 'fact-' + id + '-2'], factWithPicture: 'fact-' + id + '-1',
-    }));
-    phrases['machine-' + id] = 'Машина ' + (i + 1);
-    phrases['machine-' + id + '-acc'] = 'машину ' + (i + 1);
-    phrases['fact-' + id + '-1'] = 'Факт один про машину ' + (i + 1);
-    phrases['fact-' + id + '-2'] = 'Факт два про машину ' + (i + 1);
-    const prefix = 'machine/' + base.id + '/';
-    for (const k of Object.keys(realArt)) if (k.startsWith(prefix)) art['machine/' + id + '/' + k.slice(prefix.length)] = realArt[k];
-  }
-  // Машины, чьих картинок зона «Контент» ещё не нарисовала, — простые прямоугольники нужного размера.
-  const box = (w, h) => ({ w, h, draw: (g) => { g.fillStyle = '#e8a33a'; g.fillRect(0, 0, w, h); } });
-  for (const m of realData.machines) {
-    for (const pose of ['idle', 'work', 'dirty', 'silhouette']) {
-      const k = 'machine/' + m.id + '/whole/' + pose;
-      if (!art[k]) art[k] = box(m.size.w, m.size.h);
-    }
-    for (const p of m.parts) if (!art['machine/' + m.id + '/part/' + p.id]) art['machine/' + m.id + '/part/' + p.id] = box(p.w, p.h);
-  }
-  // Фон гаража рисует зона «Контент»; пока его нет — простая заливка, чтобы проверять свои заглушки.
-  if (!art['bg/garage']) art['bg/garage'] = { w: 1024, h: 768, draw: (g) => { g.fillStyle = '#ccc'; g.fillRect(0, 0, 1024, 768); } };
-  for (const id of ['bg/home', 'bg/locked']) if (!art[id]) art[id] = art['bg/garage'];
-  const data = Object.assign({}, realData, { machines, phrases });
-  return { data, art };
-}
 const FX = buildFixture();
 const IDS = FX.data.machines.map((m) => m.id);
 const say = (id) => FX.data.phrases[id].replace('{name}', FX.data.childName);
 
-// Сцены мини-игр — подмены: запоминают параметры; сборка по команде теста отмечает машину собранной.
-const opened = [];
-function stub(id) {
-  return class extends Scene {
-    static id = id;
-    enter(params) { this.params = params; opened.push({ id, params }); }
-    complete() {
-      if (id === 'assembly') this.ctx.progress.setAssembled(this.params.machine);
-      this.ctx.scenes.finish({ done: true, machine: this.params.machine });
-    }
-  };
-}
-const STUBS = STAGE2_SCENES.map(stub);
+const STUBS = GARAGE_SCENES.concat(['tug', 'fuel', 'repair']).map(stub);
 
 async function world({ only } = {}) {
   const stubs = only ? STUBS.filter((S) => only.includes(S.id)) : STUBS;
@@ -114,12 +52,15 @@ function assertNoCross(g, label) {
 test('0.1 / 0.2 / 0.6 каждая сцена: 100 кадров без ошибок, без заглушек, ничего в зоне крестика', async () => {
   const err = captureErrors();
   try {
-    for (const id of ['home', 'garage', 'garage-big', 'parent', 'locked']) {
+    for (const id of ['home', 'garage', 'garage-big', 'garage-tug', 'map', 'parent', 'locked']) {
       const w = await world();
       w.progress.unlockAll();
       for (const m of IDS.slice(0, 6)) w.progress.setAssembled(m);
       let s;
-      if (id === 'garage' || id === 'garage-big') {
+      if (id === 'garage-tug') {
+        await w.scenes.open('garage', { mode: 'tug' });
+        s = w.scenes.currentScene();
+      } else if (id === 'garage' || id === 'garage-big') {
         s = await garage(w);
         if (id === 'garage-big') await bigMachine(w, s, IDS[0]);
       } else {
@@ -211,11 +152,11 @@ test('0.11 неизвестная машина в прогрессе и неиз
 
 // ---------- главный экран ----------
 
-test('главный экран: три входа, работает только гараж; ни один вход не залезает в зону крестика', async () => {
+test('главный экран: три входа, все работают; ни один вход не залезает в зону крестика', async () => {
   const w = await world();
   const h = w.scenes.currentScene();
   assert.deepEqual(h.entries.map((e) => e.id), ['map', 'garage', 'tug']);
-  assert.deepEqual(h.entries.map((e) => e.active), [false, true, false]);
+  assert.deepEqual(h.entries.map((e) => e.active), [true, true, true]);
   for (const e of h.entries) {
     assert.ok(e.rect.w >= 100 && e.rect.h >= 100, e.id);
     assert.ok(!rectsOverlap(e.rect, CROSS_ZONE), e.id);
@@ -224,15 +165,29 @@ test('главный экран: три входа, работает тольк�
   assert.equal(ENTRIES.length, 3);
 });
 
-test('главный экран: закрытые входы не открывают сцен — фраза «потом» и гудок', async () => {
+test('3.1 главный экран: карта открывает карту, гараж — гараж, канат — выбор машины для каната', async () => {
   const w = await world();
   const h = w.scenes.currentScene();
-  for (const id of ['map', 'tug']) {
+  for (const [id, scene, params] of [['map', 'map', {}], ['garage', 'garage', {}], ['tug', 'garage', { mode: 'tug' }]]) {
     tapRect(w, h.entries.find((e) => e.id === id).rect);
-    frames(w, 1.5);
+    frames(w, 1);
     await tick();
-    assert.equal(w.scenes.current(), 'home', id);
+    assert.equal(w.scenes.current(), scene, id);
+    assert.equal(!!w.scenes.currentScene().tugMode, !!params.mode, id);
+    w.scenes.back();
+    assert.equal(w.scenes.current(), 'home');
+    assert.equal(h.state, 'idle');
   }
+});
+
+test('главный экран: канат закрыт, пока сцены tug нет — фраза «потом» и гудок; появится — откроется сам', async () => {
+  const w = await world({ only: ['assembly'] });
+  const h = w.scenes.currentScene();
+  assert.deepEqual(h.entries.map((e) => e.active), [true, true, false]);
+  tapRect(w, h.entries.find((e) => e.id === 'tug').rect);
+  frames(w, 1.5);
+  await tick();
+  assert.equal(w.scenes.current(), 'home');
   assert.ok(w.voices.log.includes(say('home-closed')));
 });
 
@@ -334,10 +289,12 @@ test('гараж: каждый значок открывает свою сцен
   w.progress.savePuzzle(id, 16, Array.from({ length: 16 }, (_, i) => i)); // пазл 16 собран — 25 открыт
   const s = await garage(w);
   await bigMachine(w, s, id);
-  assert.equal(s.icons.length, 6);
+  // три значка: собрать, пазл (16 и 25), помыть; мастерская и заправка — на карте
+  assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25', 'ui/icon-wash']);
+  assert.ok(!ICONS.some((i) => i.scene === 'repair' || i.scene === 'fuel'));
   const expect = [
     ['assembly', { machine: id }], ['puzzle', { machine: id, size: 16 }], ['puzzle', { machine: id, size: 25 }],
-    ['wash', { machine: id }], ['repair', { machine: id }], ['fuel', { machine: id }],
+    ['wash', { machine: id }],
   ];
   for (let i = 0; i < expect.length; i++) {
     const ic = s.icons[i];
@@ -393,66 +350,98 @@ test('гараж: значок не показывается, если сцен�
   assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25']);
 });
 
-test('временное правило этапа 2: собрал машину — приезжает следующая по порядку', async () => {
+test('этап 3: сборка в гараже больше не открывает машины; уже открытые остаются', async () => {
   const w = await world();
+  w.progress.unlock(IDS[1]);
+  w.progress.setAssembled(IDS[2]); // старое сохранение: машина собрана, но не открыта следующая
   const s = await garage(w);
-  for (let i = 0; i < IDS.length; i++) {
-    const id = IDS[i];
+  assert.equal(w.progress.isUnlocked(IDS[3]), false);
+  for (const id of [IDS[0], IDS[1]]) {
     assert.equal(s.waiting(), id);
     tapRect(w, slot(s, id).rect);
     await tick();
     assert.equal(w.scenes.current(), 'assembly');
     w.voices.log.length = 0;
     w.scenes.currentScene().complete();
-    assert.equal(w.scenes.current(), 'garage');
-    assert.equal(slot(s, id).state, 'ready');
-    if (i + 1 < IDS.length) {
-      assert.equal(w.progress.isUnlocked(IDS[i + 1]), true);
-      assert.equal(slot(s, IDS[i + 1]).state, 'parts');
-      assert.ok(s.arrivals[IDS[i + 1]] !== undefined, 'новая машина приезжает');
-      assert.equal(w.voices.log[0], say('garage-new'));
-      if (i + 2 < IDS.length) assert.equal(w.progress.isUnlocked(IDS[i + 2]), false);
-    }
     frames(w, 2);
+    assert.equal(slot(s, id).state, 'ready');
+    assert.ok(!w.voices.log.includes(say('garage-new')));
   }
-  assert.ok(IDS.every((id) => w.progress.isAssembled(id)));
+  assert.deepEqual(IDS.filter((id) => w.progress.isUnlocked(id)), [IDS[0], IDS[1]]);
+  // открыла стройка — машина в гараже в деталях
+  w.progress.completeObject(FX.data.objects[3].id);
+  frames(w, 0.1);
+  assert.equal(slot(s, FX.data.objects[3].unlocks).state, 'parts');
 });
 
-test('временное правило: пересборка уже собранной машины не трогает открытую следующую; выход без сборки ничего не открывает', async () => {
+// ---------- канат: выбор машины ----------
+
+test('канат: гараж в режиме выбора — голос, тык по открытой машине открывает канат с ней', async () => {
   const w = await world();
-  const s = await garage(w);
-  tapRect(w, slot(s, IDS[0]).rect);
+  w.progress.unlock(IDS[1]);
+  w.progress.setAssembled(IDS[0]);
+  await w.scenes.open('garage', { mode: 'tug' });
+  const s = w.scenes.currentScene();
+  frames(w, 0.1);
+  assert.equal(w.voices.log[0], say('tug-pick'));
+  assert.deepEqual(s.target, { kind: 'tap', x: s.target.x, y: s.target.y });
+  assert.ok(inRect(s.target.x, s.target.y, slot(s, IDS[0]).rect));
+  // закрытая — не открывается
+  tapRect(w, slot(s, IDS[5]).rect);
   await tick();
-  w.scenes.back(); // крестик посреди сборки
-  assert.equal(w.progress.isUnlocked(IDS[1]), false);
+  assert.equal(w.scenes.current(), 'garage');
+  // несобранная открытая тоже годится — сразу канат, без сборки
+  opened.length = 0;
+  tapRect(w, slot(s, IDS[1]).rect);
+  await tick();
+  assert.equal(w.scenes.current(), 'tug');
+  assert.deepEqual(opened[0], { id: 'tug', params: { machine: IDS[1] } });
+  // победа — снова выбор
+  w.scenes.currentScene().complete({ won: true, level: 'easy' });
+  frames(w, 3);
+  await tick();
+  assert.equal(w.scenes.current(), 'garage');
   assert.equal(s.mode, 'row');
-  tapRect(w, slot(s, IDS[0]).rect);
-  await tick();
-  w.scenes.currentScene().complete();
-  frames(w, 2);
-  await bigMachine(w, s, IDS[0]);
-  tapRect(w, s.icons[0].rect); // собрать заново
-  await tick();
-  w.voices.log.length = 0;
-  w.scenes.currentScene().complete();
-  assert.equal(w.progress.isUnlocked(IDS[2]), false);
-  assert.ok(!w.voices.log.includes(say('garage-new')));
-  assert.equal(s.mode, 'big');
+  assert.ok(s.target);
 });
 
-test('временное правило: машина, собранная раньше, при входе в гараж открывает следующую', async () => {
+test('канат: проигрыш — «Ой, машина в луже!», мойка этой машины, потом снова выбор', async () => {
   const w = await world();
   w.progress.setAssembled(IDS[0]);
-  const s = await garage(w);
-  assert.equal(w.progress.isUnlocked(IDS[1]), true);
-  assert.equal(slot(s, IDS[1]).state, 'parts');
+  await w.scenes.open('garage', { mode: 'tug' });
+  const s = w.scenes.currentScene();
+  frames(w, 0.1);
+  perform(w, s.target);
+  await tick();
+  assert.equal(w.scenes.current(), 'tug');
+  opened.length = 0;
+  w.voices.log.length = 0;
+  w.scenes.currentScene().complete({ won: false, level: 'hard' });
+  assert.equal(w.scenes.current(), 'garage');
+  assert.equal(s.target, null);
+  assert.equal(w.voices.log[0], say('tug-to-wash'));
+  frames(w, 2.5);
+  await tick();
+  assert.equal(w.scenes.current(), 'wash');
+  assert.deepEqual(opened[0], { id: 'wash', params: { machine: IDS[0] } });
+  w.scenes.currentScene().complete();
+  assert.equal(w.scenes.current(), 'garage');
+  assert.equal(s.tugMode, true);
+  assert.ok(s.target);
+  // крестик в канате — ничего не моем
+  perform(w, s.target);
+  await tick();
+  w.scenes.back();
+  frames(w, 3);
+  await tick();
+  assert.equal(w.scenes.current(), 'garage');
 });
 
 test('гараж: подсказки — подсветка и рука на машине, что ждёт сборки, голос через 10 с', async () => {
   const w = await world();
   w.progress.setAssembled(IDS[0]);
+  w.progress.unlock(IDS[1]);
   const s = await garage(w);
-  frames(w, 2); // следующая машина приезжает — подсказки ждут
   w.voices.log.length = 0;
   frames(w, 5.2);
   assert.ok(s.hint.showHand());
