@@ -1,2 +1,2 @@
 // Номер версии. Пишется автоматически скриптом tools/build.mjs при выкладке.
-export const VERSION = "1.1";
+export const VERSION = "1.2";
