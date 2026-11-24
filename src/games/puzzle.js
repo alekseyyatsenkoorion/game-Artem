@@ -1,14 +1,15 @@
-// Пазл 16 и 25 (spec.md, раздел 4 «Пазлы»). Куски с фигурными краями, не поворачиваются;
+// Пазл 16, 25 и 36 (spec.md, раздел 4 «Пазлы»). Куски с фигурными краями, не поворачиваются;
 // на поле бледный образец; кусок встаёт только на своё место; сохранение после каждого куска.
 import { Scene } from '../core/scene.js';
+import { PUZZLE_NEEDS } from '../core/progress.js';
 import { IdleHint, drawHand, drawGlowRect } from '../core/ui.js';
 import { dist, easeOut, lerp, shuffle, logError, roundRect, CROSS_ZONE } from '../core/draw-utils.js';
 import { cutPuzzle, tracePiece, pieceMargin } from './puzzle-cut.js';
 import { staticMachine, validMachine, hasImage, drawBackground, drawSparkles, Finale } from './common.js';
 
-export const SIZES = { 16: { cols: 4, rows: 4 }, 25: { cols: 5, rows: 5 } };
+export const SIZES = { 16: { cols: 4, rows: 4 }, 25: { cols: 5, rows: 5 }, 36: { cols: 6, rows: 6 } };
 // Поле: у пазла 25 поле меньше, чтобы куски на лотке вокруг оставались крупными.
-export const BOARDS = { 16: { x: 212, y: 159, w: 600, h: 450 }, 25: { x: 252, y: 150, w: 520, h: 390 } };
+export const BOARDS = { 16: { x: 212, y: 159, w: 600, h: 450 }, 25: { x: 252, y: 150, w: 520, h: 390 }, 36: { x: 272, y: 150, w: 480, h: 360 } };
 export const BOARD = BOARDS[16];
 const GAP = 6;
 const NEAR_MISS = 60;
@@ -61,7 +62,7 @@ export class PuzzleScene extends Scene {
     const m = staticMachine(params);
     const list = ['bg/puzzle', 'ui/hand', 'ui/lock'];
     if (!m) return list;
-    const size = Number(params.size) === 25 ? 25 : 16;
+    const size = SIZES[Number(params.size)] ? Number(params.size) : 16;
     return list.concat(['puzzle/' + m.id + '/' + size, 'machine/' + m.id + '/whole/idle', 'machine/' + m.id + '/whole/work']);
   }
 
@@ -86,8 +87,8 @@ export class PuzzleScene extends Scene {
     this.picId = 'puzzle/' + m.id + '/' + size;
     this.hasPic = hasImage(ctx.assets, this.picId);
     this.facing = (m.puzzles && m.puzzles[size] && m.puzzles[size].facing) || (size === 16 ? 'left' : 'right');
-    if (size === 25 && ctx.progress.puzzleState(m.id, 16) !== 'done') {
-      // пазл 25 закрыт, пока не собран 16
+    if (PUZZLE_NEEDS[size] && ctx.progress.puzzleState(m.id, PUZZLE_NEEDS[size]) !== 'done') {
+      // пазл 25 закрыт, пока не собран 16; пазл 36 — пока не собран 25
       this.state = 'locked';
       this.lockT = 0;
       this.lockVoice = false;
@@ -132,6 +133,7 @@ export class PuzzleScene extends Scene {
         g.globalAlpha = 0.28;
         this._drawPicture(g, 0, 0, B.w, B.h, 0, 0, 1);
         g.globalAlpha = 1;
+        this._drawGrid(g, 0, 0);
       },
     };
     this.bakedIds.push(this.paleId);
@@ -158,6 +160,18 @@ export class PuzzleScene extends Scene {
       this.bakedIds.push(id);
     }
     try { a.register(entries); } catch (e) { for (const p of this.pieces) p.img = null; this.bakedIds = []; this.paleId = null; this.layerId = null; }
+  }
+
+  // Сетка на поле: контур каждого гнезда, чтобы ребёнок видел, куда класть кусок.
+  // Светлая подложка + тёмная линия — видно и на светлых, и на тёмных местах картинки.
+  _drawGrid(g, ox, oy) {
+    g.save();
+    g.lineJoin = 'round';
+    for (const [color, width] of [['rgba(255,255,255,0.95)', 7], ['rgba(70,90,120,0.85)', 3]]) {
+      g.strokeStyle = color; g.lineWidth = width;
+      for (const cp of this.cut.pieces) { tracePiece(g, this.cut, cp, ox + cp.x, oy + cp.y, 1); g.stroke(); }
+    }
+    g.restore();
   }
 
   // ---------- логика ----------
@@ -387,6 +401,8 @@ export class PuzzleScene extends Scene {
   _drawStatic(g, placed, resting) {
     const a = this.ctx.assets;
     drawBackground(g, a, 'bg/puzzle', '#b8e0ff', '#a5d6a7');
+    g.fillStyle = 'rgba(120, 80, 40, 0.12)'; // мягкая тень под полем
+    roundRect(g, this.board.x - 12, this.board.y - 9, this.board.w + 24, this.board.h + 24, 22); g.fill();
     g.fillStyle = '#ffffff';
     roundRect(g, this.board.x - 10, this.board.y - 10, this.board.w + 20, this.board.h + 20, 16); g.fill();
     if (this.paleId) {
@@ -395,6 +411,7 @@ export class PuzzleScene extends Scene {
       g.save(); g.globalAlpha = 0.28;
       this._drawPicture(g, 0, 0, this.board.w, this.board.h, this.board.x, this.board.y, 1);
       g.restore();
+      this._drawGrid(g, this.board.x, this.board.y);
     }
     const m = pieceMargin(this.cut);
     const baked = this.pieces.length > 0 && !!this.pieces[0].img;

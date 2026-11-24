@@ -6,6 +6,9 @@ export const BROKEN_KEY = 'stroika.save.broken';
 export const FORMAT = 1;
 
 const PUZZLE_STATES = ['none', 'started', 'done'];
+export const PUZZLE_SIZES = [16, 25, 36];
+// Какой пазл той же машины нужно собрать, чтобы открылся этот (25 после 16, 36 после 25).
+export const PUZZLE_NEEDS = { 25: 16, 36: 25 };
 const TUG_LEVELS = ['easy', 'medium', 'hard'];
 
 // Переносы со старых форматов: MIGRATIONS[n] превращает формат n в n + 1.
@@ -15,9 +18,9 @@ export const MIGRATIONS = {
     const s = { format: 1, machines: {}, puzzleInProgress: {}, objects: {}, map: { stop: 0 },
       tug: { nextLevel: 'easy', wins: 0, losses: 0 }, wash: { lastWasStubborn: false },
       settings: { timerMinutes: 30 } };
-    for (const id of old.unlocked || []) s.machines[id] = { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none' };
+    for (const id of old.unlocked || []) s.machines[id] = { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none', puzzle36: 'none' };
     for (const id of old.assembled || []) {
-      s.machines[id] = s.machines[id] || { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none' };
+      s.machines[id] = s.machines[id] || { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none', puzzle36: 'none' };
       s.machines[id].assembled = true;
     }
     if (typeof old.timerMinutes === 'number') s.settings.timerMinutes = old.timerMinutes;
@@ -26,7 +29,7 @@ export const MIGRATIONS = {
 };
 
 function emptyMachine() {
-  return { unlocked: false, assembled: false, puzzle16: 'none', puzzle25: 'none' };
+  return { unlocked: false, assembled: false, puzzle16: 'none', puzzle25: 'none', puzzle36: 'none' };
 }
 
 export class Progress {
@@ -100,6 +103,7 @@ export class Progress {
           assembled: !!m.assembled,
           puzzle16: PUZZLE_STATES.includes(m.puzzle16) ? m.puzzle16 : 'none',
           puzzle25: PUZZLE_STATES.includes(m.puzzle25) ? m.puzzle25 : 'none',
+          puzzle36: PUZZLE_STATES.includes(m.puzzle36) ? m.puzzle36 : 'none', // с версии 1.6; в старых сохранениях нет
         };
       }
     } else throw new Error('нет machines');
@@ -185,7 +189,7 @@ export class Progress {
 
   puzzleState(machine, size) {
     const m = this._machine(machine);
-    if (!m || (size !== 16 && size !== 25)) return 'none';
+    if (!m || !PUZZLE_SIZES.includes(size)) return 'none';
     return m['puzzle' + size];
   }
   puzzlePieces(machine, size) {
@@ -195,7 +199,7 @@ export class Progress {
   }
   savePuzzle(machine, size, pieces) {
     const m = this._machine(machine, true);
-    if (!m || (size !== 16 && size !== 25) || !Array.isArray(pieces)) return;
+    if (!m || !PUZZLE_SIZES.includes(size) || !Array.isArray(pieces)) return;
     const uniq = Array.from(new Set(pieces.filter((n) => Number.isInteger(n) && n >= 0 && n < size)));
     const key = machine + '-' + size;
     if (uniq.length >= size) {

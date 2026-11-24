@@ -109,6 +109,17 @@ test('1.14 два разных описания пазла: 16 — влево н
   }
 });
 
+test('пазл 36: у каждой машины своя готовая постройка, все 10 разные и есть в данных', () => {
+  const seen = new Set();
+  for (const m of data.machines) {
+    const p = m.puzzles[36];
+    assert.equal(p.facing, 'left'); assert.equal(p.scene, 'postroika');
+    assert.ok(data.objects.some((o) => o.id === p.object), m.id + ': нет объекта ' + p.object);
+    seen.add(p.object);
+  }
+  assert.equal(seen.size, 10);
+});
+
 test('имя ребёнка хранится в одном месте', () => {
   assert.equal(data.childName, 'Артём');
   const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
@@ -157,7 +168,7 @@ function expectedArt() {
   for (const m of data.machines) {
     for (const p of m.parts) list.push(['machine/' + m.id + '/part/' + p.id, p.w, p.h]);
     for (const pose of ['idle', 'work', 'dirty', 'silhouette']) list.push(['machine/' + m.id + '/whole/' + pose, m.size.w, m.size.h]);
-    list.push(['puzzle/' + m.id + '/16', 640, 480], ['puzzle/' + m.id + '/25', 640, 480]);
+    list.push(['puzzle/' + m.id + '/16', 640, 480], ['puzzle/' + m.id + '/25', 640, 480], ['puzzle/' + m.id + '/36', 640, 480]);
   }
   for (const b of ['home', 'assembly', 'garage', 'puzzle', 'wash', 'repair', 'fuel']) list.push(['bg/' + b, 1024, 768]);
   return list;
@@ -181,12 +192,12 @@ test('все зарегистрированные картинки рисуют�
   }
 });
 
-test('20 картинок пазлов — 20 разных рисунков', () => {
+test('30 картинок пазлов — 30 разных рисунков', () => {
   const sigs = new Set();
-  for (const m of data.machines) for (const size of [16, 25]) {
+  for (const m of data.machines) for (const size of [16, 25, 36]) {
     const g = fakeGraphics();
     art['puzzle/' + m.id + '/' + size].draw(g, 640, 480);
     sigs.add(JSON.stringify(g.calls.slice(0, 600)));
   }
-  assert.equal(sigs.size, 20);
+  assert.equal(sigs.size, 30);
 });

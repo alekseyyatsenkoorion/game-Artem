@@ -16,7 +16,7 @@ test('2.19 новая игра: открыт только самосвал, фо
   const saved = JSON.parse(st.getItem(SAVE_KEY));
   assert.deepEqual(Object.keys(saved).sort(), ['format', 'machines', 'map', 'objects', 'puzzleInProgress', 'settings', 'tug', 'wash'].sort());
   assert.equal(saved.format, 1);
-  assert.deepEqual(saved.machines.samosval, { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none' });
+  assert.deepEqual(saved.machines.samosval, { unlocked: true, assembled: false, puzzle16: 'none', puzzle25: 'none', puzzle36: 'none' });
   assert.deepEqual(saved.settings, { timerMinutes: 30 });
   assert.deepEqual(saved.tug, { nextLevel: 'easy', wins: 0, losses: 0 });
 });
@@ -138,4 +138,18 @@ test('0.12 мойка: wash() / saveWash() читают и пишут поле w
   assert.equal(p2.wash().lastWasStubborn, true);
   p2.saveWash(null);
   assert.equal(p2.wash().lastWasStubborn, true);
+});
+
+test('пазл 36: старое сохранение без puzzle36 читается, пазлы 16 и 25 не теряются; 36 сохраняется', () => {
+  const st = memoryStorage();
+  st.setItem(SAVE_KEY, JSON.stringify({ format: 1, machines: { samosval: { unlocked: true, assembled: true, puzzle16: 'done', puzzle25: 'done' } }, puzzleInProgress: {}, objects: {}, map: { stop: 3 }, settings: { timerMinutes: 30 }, tug: { nextLevel: 'easy', wins: 0, losses: 0 }, wash: {} }));
+  const p = make(st);
+  assert.equal(p.puzzleState('samosval', 16), 'done');
+  assert.equal(p.puzzleState('samosval', 25), 'done');
+  assert.equal(p.puzzleState('samosval', 36), 'none');
+  p.savePuzzle('samosval', 36, [0, 35]);
+  assert.equal(p.puzzleState('samosval', 36), 'started');
+  assert.deepEqual(make(st).puzzlePieces('samosval', 36), [0, 35]);
+  p.savePuzzle('samosval', 36, Array.from({ length: 36 }, (_, i) => i));
+  assert.equal(make(st).puzzleState('samosval', 36), 'done');
 });

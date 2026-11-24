@@ -6,6 +6,9 @@ import { cutPuzzle, pieceContains, pieceAt, pieceMargin } from '../../src/games/
 import { CROSS_ZONE, rectsOverlap } from '../../src/core/draw-utils.js';
 import { memoryStorage, captureErrors } from '../core/helpers.js';
 import { openScene, settle, runToFinish, MACHINES, data, tick } from './helpers.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 function drag(s, p, x, y) {
   s.onPointer({ type: 'down', x: p.cx, y: p.cy });
@@ -16,9 +19,11 @@ function drag(s, p, x, y) {
 
 // Открыть пазл 25: сначала отметить 16 собранным.
 function done16(machine) { return (w) => w.progress.savePuzzle(machine, 16, Array.from({ length: 16 }, (_, i) => i)); }
+// Открыть пазл 36: отметить собранными 16 и 25.
+function done25(machine) { return (w) => { done16(machine)(w); w.progress.savePuzzle(machine, 25, Array.from({ length: 25 }, (_, i) => i)); }; }
 
 test('2.5 пазл 16 режется на 16 кусков, 25 — на 25; куски покрывают картинку целиком и без наложений', () => {
-  for (const [n, cols] of [[16, 4], [25, 5]]) {
+  for (const [n, cols] of [[16, 4], [25, 5], [36, 6]]) {
     const cut = cutPuzzle(cols, cols, BOARD.w, BOARD.h);
     assert.equal(cut.pieces.length, n);
     // каждая точка картинки принадлежит ровно одному куску
@@ -50,8 +55,8 @@ test('2.5 пазл 16 режется на 16 кусков, 25 — на 25; ку�
 });
 
 for (const machine of MACHINES) {
-  for (const size of [16, 25]) {
-    const before = size === 25 ? done16(machine) : null;
+  for (const size of [16, 25, 36]) {
+    const before = size === 25 ? done16(machine) : size === 36 ? done25(machine) : null;
 
     test('2.9 ' + machine + ' ' + size + ': куски в начале не на своих местах, на экране, не друг на друге', async () => {
       const { s } = await openScene(PuzzleScene, { machine, size }, { before });
@@ -138,6 +143,15 @@ test('2.37 пазл 25 закрыт, пока не собран пазл 16: г�
   assert.equal(r3.s.pieces.length, 25);
 });
 
+test('пазл 36 закрыт, пока не собран пазл 25; после 25 открыт', async () => {
+  const machine = MACHINES[2];
+  const locked = await openScene(PuzzleScene, { machine, size: 36 }, { before: done16(machine) });
+  assert.equal(locked.s.state, 'locked');
+  const { s } = await openScene(PuzzleScene, { machine, size: 36 }, { before: done25(machine) });
+  assert.equal(s.state, 'play');
+  assert.equal(s.pieces.length, 36);
+});
+
 test('2.38 картинка любого размера рисуется в рамку поля, обрезка по центру', async () => {
   const machine = MACHINES[0];
   const { s, w } = await openScene(PuzzleScene, { machine, size: 16 });
@@ -156,7 +170,7 @@ test('2.38 картинка любого размера рисуется в ра
 test('пазл: неизвестный размер — журнал и выход назад', async () => {
   const err = captureErrors();
   try {
-    const { w } = await openScene(PuzzleScene, { machine: MACHINES[0], size: 36 });
+    const { w } = await openScene(PuzzleScene, { machine: MACHINES[0], size: 49 });
     w.scenes.update(0.02);
     assert.equal(w.scenes.current(), 'home');
     assert.ok(err.list.length >= 1);

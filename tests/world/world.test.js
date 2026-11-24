@@ -9,6 +9,9 @@ import { GARAGE_SCENES, ICONS } from '../../src/world/garage.js';
 import { CROSS_ZONE, rectsOverlap, inRect } from '../../src/core/draw-utils.js';
 import { makeWorld, fakeGraphics, captureErrors, tick } from '../core/helpers.js';
 import { buildFixture, stub, opened, perform } from './fixture.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 const FX = buildFixture();
 const IDS = FX.data.machines.map((m) => m.id);
@@ -287,14 +290,15 @@ test('гараж: каждый значок открывает свою сцен
   w.progress.unlockAll();
   for (const m of IDS) w.progress.setAssembled(m);
   w.progress.savePuzzle(id, 16, Array.from({ length: 16 }, (_, i) => i)); // пазл 16 собран — 25 открыт
+  w.progress.savePuzzle(id, 25, Array.from({ length: 25 }, (_, i) => i)); // пазл 25 собран — 36 открыт
   const s = await garage(w);
   await bigMachine(w, s, id);
-  // три значка: собрать, пазл (16 и 25), помыть; мастерская и заправка — на карте
-  assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25', 'ui/icon-wash']);
+  // значки: собрать, пазлы 16, 25, 36, помыть; мастерская и заправка — на карте
+  assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25', 'ui/icon-puzzle36', 'ui/icon-wash']);
   assert.ok(!ICONS.some((i) => i.scene === 'repair' || i.scene === 'fuel'));
   const expect = [
     ['assembly', { machine: id }], ['puzzle', { machine: id, size: 16 }], ['puzzle', { machine: id, size: 25 }],
-    ['wash', { machine: id }],
+    ['puzzle', { machine: id, size: 36 }], ['wash', { machine: id }],
   ];
   for (let i = 0; i < expect.length; i++) {
     const ic = s.icons[i];
@@ -347,7 +351,7 @@ test('гараж: значок не показывается, если сцен�
   w.progress.setAssembled(IDS[0]);
   const s = await garage(w);
   await bigMachine(w, s, IDS[0]);
-  assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25']);
+  assert.deepEqual(s.icons.map((i) => i.icon), ['ui/icon-assembly', 'ui/icon-puzzle16', 'ui/icon-puzzle25', 'ui/icon-puzzle36']);
 });
 
 test('этап 3: сборка в гараже больше не открывает машины; уже открытые остаются', async () => {

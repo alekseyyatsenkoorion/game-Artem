@@ -15,7 +15,7 @@ export function gptManifest(dir) {
   const out = {};
   if (!existsSync(dir)) return out;
   for (const f of readdirSync(dir).sort()) {
-    let m = /^puzzle-\d+-([a-z-]+)-(16|25)\.(png|jpe?g|webp)$/i.exec(f);
+    let m = /^puzzle-\d+-([a-z-]+)-(16|25|36)\.(png|jpe?g|webp)$/i.exec(f);
     if (m) { out['puzzle/' + m[1] + '/' + m[2]] = f; continue; }
     m = /^bg-([a-z-]+)\.(png|jpe?g|webp)$/i.exec(f);
     if (m && BG_NAMES[m[1]]) out['bg/' + BG_NAMES[m[1]]] = f;

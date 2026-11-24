@@ -5,6 +5,9 @@ import { RepairScene, KINDS, PUMP_TAPS, CLEAN_ENOUGH, chooseKind } from '../../s
 import { FuelScene, FILL_TIME } from '../../src/games/fuel.js';
 import { seededRandom } from '../core/helpers.js';
 import { openScene, settle, runToFinish, MACHINES, data, tick } from './helpers.js';
+import { HINT } from '../../src/core/ui.js';
+// Логику подсказок проверяем на коротких сроках; сами сроки (30 с) — в tests/core/hint.test.js.
+Object.assign(HINT, { hand: 5, voice: 10, every: 15 });
 
 const say = (id) => data.phrases[id].replace('{name}', data.childName);
 const withWheels = data.machines.filter((m) => Array.isArray(m.wheels) && m.wheels.length).map((m) => m.id);

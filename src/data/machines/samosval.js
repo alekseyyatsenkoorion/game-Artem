@@ -23,6 +23,7 @@ export default {
   puzzles: {
     16: { facing: 'left', scene: 'nature' },
     25: { facing: 'right', scene: 'stroika' },
+    36: { facing: 'left', scene: 'postroika', object: 'pesochnitsa' }, // рядом с готовой постройкой
   },
   // Звуки создаются кодом: частота мотора и ноты гудка.
   sounds: {

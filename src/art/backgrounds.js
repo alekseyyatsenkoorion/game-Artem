@@ -172,9 +172,7 @@ function drawPuzzle(g) {
   }
   g.fillStyle = '#d9b07a';
   for (let y = 0; y < H; y += 128) g.fillRect(0, y, W, 3);
-  // мягкая тень под полем пазла
-  g.fillStyle = 'rgba(120, 80, 40, 0.12)';
-  roundRect(g, 200, 150, 624, 474, 22); g.fill();
+  // тень под полем пазла рисует сама сцена: у пазлов 16, 25 и 36 поле разного размера
 }
 
 function drawWash(g) {
