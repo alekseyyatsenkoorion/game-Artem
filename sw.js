@@ -10,6 +10,7 @@ const FILES = [
   "icon-512.png",
   "index.html",
   "manifest.webmanifest",
+  "src/art/animals.js",
   "src/art/backgrounds.js",
   "src/art/index.js",
   "src/art/machines/avtokran.js",
