@@ -52,8 +52,10 @@ export class LiftAction extends DragAction {
       g.strokeStyle = '#c98f0a'; g.lineWidth = 3;
       g.beginPath(); g.moveTo(px, py); g.lineTo(this.item.x, TIP_Y); g.stroke();
     }
+    // кран на объекте (env.onSite): трос спускается из-за верхнего края экрана (у крестика — пониже)
+    const ropeTop = r || !this.env.onSite ? TIP_Y : this.item.x < 130 ? 104 : -10;
     g.strokeStyle = '#333'; g.lineWidth = 4;
-    g.beginPath(); g.moveTo(this.item.x, TIP_Y); g.lineTo(this.item.x, top - 16); g.stroke();
+    g.beginPath(); g.moveTo(this.item.x, ropeTop); g.lineTo(this.item.x, top - 16); g.stroke();
     // крюк
     g.strokeStyle = '#555'; g.lineWidth = 6;
     g.beginPath(); g.arc(this.item.x, top - 8, 9, Math.PI * 1.1, Math.PI * 2.1); g.stroke();

@@ -4,6 +4,8 @@
 // Машина шага подъезжает слева, подсвечивается, голос даёт задание; действие ребёнка — модуль из build-actions/.
 // Прогресс пишется после каждого повтора; после последнего шага — completeObject (открывает машину).
 // Уже построенный объект можно построить ещё раз: без записи прогресса.
+// Машина на объекте: если среди уже показанных слоёв есть слой с id, равным id машины шага (башенный кран,
+// поставленный на объект), машина не подъезжает и не рисуется слева — действие идёт без неё (груз — на тросе сверху).
 // Публичное поле target — текущее ожидаемое действие (для e2e): {kind, x, y, to?, path?, seconds?} или null.
 import { Scene } from '../core/scene.js';
 import { IdleHint, drawHand } from '../core/ui.js';
@@ -109,6 +111,20 @@ export class BuildScene extends Scene {
 
   get step() { return this.steps ? this.steps[this.stepIndex] : null; }
 
+  // Машина шага i уже стоит на объекте: её нарисовал слой пройденного шага (id слоя = id машины).
+  onSite(i) {
+    const s = this.steps && this.steps[i];
+    if (!s || !s.machine) return false;
+    for (let j = 0; j < i; j++) if (this.steps[j] && this.steps[j].layer === s.machine) return true;
+    return false;
+  }
+
+  // Машина, которая подъезжает и рисуется у объекта на шаге i (null — без машины или она на объекте).
+  _stepMachine(i) {
+    const s = this.steps[i];
+    return s && !this.onSite(i) ? this._machineDef(s.machine) : null;
+  }
+
   // Что сейчас ждём от ребёнка (для e2e и руки-подсказки).
   get target() {
     if (this.phase !== 'work' || !this.action) return null;
@@ -119,7 +135,7 @@ export class BuildScene extends Scene {
 
   _beginStep() {
     const step = this.step;
-    const m = this._machineDef(step.machine);
+    const m = this._stepMachine(this.stepIndex);
     const same = m && this.machineOn && this.machineOn.id === m.id && this.mirrorOn === facesBack(step.action, m);
     if (this.machineOn && !same) {
       this.phase = 'leave';
@@ -135,7 +151,8 @@ export class BuildScene extends Scene {
 
   _startWork() {
     const step = this.step;
-    const m = this._machineDef(step.machine);
+    const m = this._stepMachine(this.stepIndex);
+    const onSite = this.onSite(this.stepIndex);
     const mirror = facesBack(step.action, m);
     this.machineOn = m;
     this.mirrorOn = mirror;
@@ -144,6 +161,7 @@ export class BuildScene extends Scene {
       step,
       machine: m,
       mirror,
+      onSite,
       homeRect: () => machineHome(m),
       drawMachine: (g, r, pose) => this._drawMachine(g, m, r, pose, mirror),
       time: () => this.t,
@@ -154,7 +172,7 @@ export class BuildScene extends Scene {
     this.phaseT = 0;
     this.hint.reset();
     this.voiceHints = 0;
-    if (m) this.ctx.audio.play('horn/' + m.id);
+    if (step.machine && (m || onSite)) this.ctx.audio.play('horn/' + step.machine);
     if (step.phrase) this.ctx.audio.say(step.phrase);
   }
 
@@ -234,7 +252,7 @@ export class BuildScene extends Scene {
     } else if (this.phase === 'leave') {
       if (this.phaseT >= LEAVE_TIME) {
         this.machineOn = null;
-        const m = this._machineDef(this.step.machine);
+        const m = this._stepMachine(this.stepIndex);
         if (m) { this.phase = 'arrive'; this.phaseT = 0; this.ctx.audio.play('engine/' + m.id); } else this._startWork();
       }
     } else if (this.phase === 'arrive') {
@@ -319,7 +337,7 @@ export class BuildScene extends Scene {
       // машина подъезжает слева или уезжает влево
       let m = this.machineOn;
       let mirror = this.mirrorOn;
-      if (this.phase === 'arrive') { m = this._machineDef(this.step.machine); mirror = facesBack(this.step.action, m); }
+      if (this.phase === 'arrive') { m = this._stepMachine(this.stepIndex); mirror = facesBack(this.step.action, m); }
       if (m) {
         const r = machineHome(m);
         let dx = 0;

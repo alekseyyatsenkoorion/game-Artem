@@ -422,3 +422,46 @@ test('3.5 (логика) настоящие объекты зоны «Конте
     assert.deepEqual(err.list, []);
   } finally { err.restore(); }
 });
+
+test('машина на объекте: если показан слой с id машины шага, она не подъезжает и не рисуется слева; груз на тросе сверху', async () => {
+  // своя копия тестовых данных: шаг 1 ставит на объект слой «кран» (id слоя = id машины lift), шаг 2 — lift этой машиной
+  const crane = FX.data.machines[7].id;
+  const fx = { data: Object.assign({}, FX.data), art: Object.assign({}, FX.art) };
+  const o = {
+    id: 'fx-tower', order: 99, namePhrase: 'object-fx-1', unlocks: null,
+    steps: [
+      { machine: null, action: 'place', repeats: 1, phrase: 'step-fx-1-1', layer: crane },
+      { machine: crane, action: 'lift', repeats: 2, phrase: 'step-fx-1-2', layer: 'l2' },
+      { machine: FX.data.machines[0].id, action: 'haul-in', repeats: 1, phrase: 'step-fx-1-3', layer: 'l3' },
+    ],
+  };
+  fx.data.objects = FX.data.objects.concat([o]);
+  for (const st of o.steps) fx.art['object/fx-tower/layer/' + st.layer] = FX.art['object/fx-1/layer/l1'];
+  const { w, s, results } = await openAtStep(fx, o, 1);
+  assert.equal(s.stepIndex, 1);
+  assert.equal(s.onSite(1), true);
+  assert.equal(s.onSite(2), false);
+  assert.equal(s.phase, 'work', 'не подъезжал');
+  assert.equal(s.machineOn, null);
+  const craneImgs = Object.keys(fx.art).filter((k) => k.startsWith('machine/' + crane + '/'));
+  const imgs = craneImgs.map((k) => w.assets.image(k));
+  const g = trackingGraphics();
+  s.draw(g);
+  assert.ok(!g.drawn.some((d) => d.op === 'drawImage' && imgs.includes(d.img)), 'кран слева не рисуется');
+  // трос сверху: штрих от верхнего края экрана до груза
+  const tg = s.target;
+  assert.equal(tg.kind, 'drag');
+  assert.ok(g.drawn.some((d) => d.op === 'stroke' && d.y <= 0 && d.y + d.h >= tg.y - 60 && Math.abs(d.x - tg.x) < 4), 'трос сверху');
+  assert.deepEqual(crossZoneViolations(g), []);
+  // цель рабочая: оба повтора через target, дальше — следующий шаг, его машина подъезжает
+  await runBuild(w, s);
+  assert.deepEqual(results, [{ done: true, object: 'fx-tower' }]);
+  // без слоя-крана тот же шаг идёт с машиной слева
+  const fx2 = { data: Object.assign({}, fx.data), art: fx.art };
+  const o2 = Object.assign({}, o, { steps: [Object.assign({}, o.steps[0], { layer: 'l1' })].concat(o.steps.slice(1)) });
+  fx2.data.objects = FX.data.objects.concat([o2]);
+  fx2.art['object/fx-tower/layer/l1'] = FX.art['object/fx-1/layer/l1'];
+  const r2 = await openAtStep(fx2, o2, 1);
+  assert.equal(r2.s.onSite(1), false);
+  assert.equal(r2.s.machineOn && r2.s.machineOn.id, crane);
+});
