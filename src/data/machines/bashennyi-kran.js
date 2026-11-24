@@ -22,7 +22,7 @@ export default {
   wheels: [],
   fuelPoint: { x: 180, y: 360 },
   tug: 'hard',
-  // Черновик: проверенные факты готовятся на этапе 3 и показываются Alex до озвучки.
+  // Факты проверены и утверждены Alex 24.11.2026.
   facts: ['fact-bashennyi-kran-1', 'fact-bashennyi-kran-2', 'fact-bashennyi-kran-3', 'fact-bashennyi-kran-4', 'fact-bashennyi-kran-5'],
   factWithPicture: 'fact-bashennyi-kran-1',
   puzzles: {

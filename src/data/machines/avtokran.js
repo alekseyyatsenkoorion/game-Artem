@@ -20,7 +20,7 @@ export default {
   wheels: ['koleso-zadnee', 'koleso-perednee'],
   fuelPoint: { x: 300, y: 288 },
   tug: 'hard',
-  // Черновик: проверенные факты готовятся на этапе 3 и показываются Alex до озвучки.
+  // Факты проверены и утверждены Alex 24.11.2026.
   facts: ['fact-avtokran-1', 'fact-avtokran-2', 'fact-avtokran-3', 'fact-avtokran-4'],
   factWithPicture: 'fact-avtokran-1',
   puzzles: {
