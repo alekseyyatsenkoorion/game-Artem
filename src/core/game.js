@@ -88,6 +88,7 @@ export class Game {
       audio: this.audio,
       timer: this.timer,
       data: this.data,
+      updater: this.updater,
       random: this.random,
       screen: { width: SCREEN.width, height: SCREEN.height },
     });

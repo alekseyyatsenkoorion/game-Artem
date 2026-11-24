@@ -93,8 +93,181 @@ function drawLocked(g) {
   g.fillStyle = '#1b2438'; g.fillRect(270, 360, 484, 250);
 }
 
+
+// ---------- фоны этапа 2 ----------
+// Левый верхний угол 96×96 — спокойный (там крестик). Центр — без мелочей: там игровые предметы.
+
+function tileWall(g, x0, y0, x1, y1, size, c1, c2, grout) {
+  g.fillStyle = grout; g.fillRect(x0, y0, x1 - x0, y1 - y0);
+  for (let y = y0, r = 0; y < y1; y += size, r++) for (let x = x0, c = 0; x < x1; x += size, c++) {
+    g.fillStyle = (r + c) % 2 ? c1 : c2;
+    g.fillRect(x + 2, y + 2, size - 4, size - 4);
+  }
+}
+
+function wrench(g, x, y, a, s, color = '#9aa0aa') {
+  g.save(); g.translate(x, y); g.rotate(a); g.scale(s, s);
+  g.fillStyle = color; g.strokeStyle = '#2a2230'; g.lineWidth = 3;
+  roundRect(g, -6, 0, 12, 70, 5); g.fill(); g.stroke();
+  g.beginPath(); g.arc(0, 0, 14, 0.5, Math.PI * 2 - 0.5 + Math.PI * 0, false); g.lineTo(0, 0); g.closePath(); g.fill(); g.stroke();
+  g.restore();
+}
+
+function hammer(g, x, y, a, s) {
+  g.save(); g.translate(x, y); g.rotate(a); g.scale(s, s);
+  g.fillStyle = '#c98a4b'; g.strokeStyle = '#2a2230'; g.lineWidth = 3;
+  roundRect(g, -5, 0, 10, 70, 4); g.fill(); g.stroke();
+  g.fillStyle = '#5a5f6b'; roundRect(g, -20, -10, 40, 18, 4); g.fill(); g.stroke();
+  g.restore();
+}
+
+function drawGarage(g) {
+  // задняя стена
+  g.fillStyle = '#cfe6f5'; g.fillRect(0, 0, W, H);
+  g.fillStyle = '#bcd9ee';
+  for (let x = 0; x < W; x += 64) g.fillRect(x, 0, 4, H);
+  // окна под потолком (не в углу крестика)
+  for (const x of [260, 460, 660, 860]) {
+    g.fillStyle = '#8fb3cc'; roundRect(g, x - 6, 30, 112, 70, 10); g.fill();
+    g.fillStyle = '#e8f7ff'; roundRect(g, x, 36, 100, 58, 8); g.fill();
+    g.fillStyle = '#8fb3cc'; g.fillRect(x + 48, 36, 4, 58);
+  }
+  // лампы
+  g.fillStyle = '#fff3b0';
+  for (const x of [160, 512, 864]) { g.beginPath(); g.ellipse(x, 120, 50, 10, 0, 0, Math.PI * 2); g.fill(); }
+  // два ряда мест по 5 (места гаража: верх 152..402, низ 426..676)
+  const x0 = 28, sw = 184, gap = 12;
+  for (const [top, floor] of [[152, 368], [426, 642]]) {
+    // пол ряда
+    g.fillStyle = '#9aa5b1'; g.fillRect(0, floor, W, 34);
+    g.fillStyle = '#87929e'; g.fillRect(0, floor, W, 5);
+    for (let i = 0; i < 5; i++) {
+      const x = x0 + i * (sw + gap);
+      // ниша-бокс
+      g.fillStyle = 'rgba(255,255,255,0.35)';
+      roundRect(g, x, top + 30, sw, floor - top - 30, 14); g.fill();
+      // жёлтая разметка между местами
+      g.fillStyle = '#ffcf3a';
+      g.fillRect(x - gap / 2 - 3, floor + 8, 6, 26);
+      g.fillRect(x + 20, floor + 18, sw - 40, 6);
+    }
+    g.fillStyle = '#ffcf3a'; g.fillRect(x0 + 5 * (sw + gap) - gap / 2 - 3, floor + 8, 6, 26);
+  }
+  // нижняя полоса пола
+  g.fillStyle = '#8a95a1'; g.fillRect(0, 676, W, 92);
+  g.fillStyle = '#ffcf3a';
+  for (let x = 20; x < W; x += 120) g.fillRect(x, 716, 70, 10);
+  // инструменты по краям нижнего ряда пола
+  wrench(g, 980, 700, 0.6, 0.7); hammer(g, 940, 690, -0.5, 0.8);
+}
+
+function drawPuzzle(g) {
+  // спокойный деревянный стол
+  g.fillStyle = '#e8c79a'; g.fillRect(0, 0, W, H);
+  g.strokeStyle = '#dcb886'; g.lineWidth = 3;
+  for (let y = 40; y < H; y += 64) {
+    g.beginPath(); g.moveTo(0, y);
+    for (let x = 0; x <= W; x += 32) g.lineTo(x, y + Math.sin(x / 90 + y) * 4);
+    g.stroke();
+  }
+  g.fillStyle = '#d9b07a';
+  for (let y = 0; y < H; y += 128) g.fillRect(0, y, W, 3);
+  // мягкая тень под полем пазла
+  g.fillStyle = 'rgba(120, 80, 40, 0.12)';
+  roundRect(g, 200, 150, 624, 474, 22); g.fill();
+}
+
+function drawWash(g) {
+  // плитка
+  tileWall(g, 0, 0, W, 560, 64, '#bfe4ff', '#d6efff', '#a9d2ef');
+  // трубы и душ сверху
+  g.fillStyle = '#5a6b80'; g.fillRect(140, 40, 760, 18);
+  for (const x of [300, 512, 724]) {
+    g.fillRect(x - 6, 58, 12, 30);
+    g.fillStyle = '#7f90a6'; roundRect(g, x - 30, 84, 60, 18, 8); g.fill(); g.fillStyle = '#5a6b80';
+  }
+  // шланги на стенах
+  for (const [x, flip] of [[60, 1], [964, -1]]) {
+    g.fillStyle = '#7f90a6'; roundRect(g, x - 18, 180, 36, 30, 6); g.fill();
+    g.strokeStyle = '#2f9e52'; g.lineWidth = 12; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(x, 200); g.bezierCurveTo(x + 60 * flip, 260, x - 40 * flip, 330, x + 10 * flip, 400);
+    g.bezierCurveTo(x + 40 * flip, 440, x - 10 * flip, 470, x, 500); g.stroke();
+    g.fillStyle = '#ffcf3a'; roundRect(g, x - 10, 490, 20, 40, 6); g.fill();
+  }
+  // пол с лужицами и решёткой слива
+  g.fillStyle = '#9fb4c7'; g.fillRect(0, 560, W, 208);
+  g.fillStyle = '#8aa1b6'; g.fillRect(0, 560, W, 8);
+  g.fillStyle = 'rgba(160, 215, 255, 0.7)';
+  for (const [x, y, w] of [[150, 640, 90], [820, 700, 110], [470, 730, 70]]) { g.beginPath(); g.ellipse(x, y, w, 14, 0, 0, Math.PI * 2); g.fill(); }
+  g.fillStyle = '#5a6b80'; roundRect(g, 432, 680, 160, 26, 6); g.fill();
+  g.fillStyle = '#9fb4c7'; for (let x = 444; x < 590; x += 18) g.fillRect(x, 686, 8, 14);
+  // пузырьки
+  g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = 3;
+  for (const [x, y, r] of [[200, 500, 14], [230, 470, 9], [840, 490, 12], [870, 520, 8], [180, 420, 7]]) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.stroke(); }
+}
+
+function drawRepair(g) {
+  // стена мастерской
+  g.fillStyle = '#f3d9b5'; g.fillRect(0, 0, W, 560);
+  g.fillStyle = '#ecc996'; g.fillRect(0, 470, W, 90);
+  // доска с инструментами (справа от зоны крестика, не над насосом справа)
+  g.fillStyle = '#c98a4b'; roundRect(g, 150, 40, 560, 180, 12); g.fill();
+  g.fillStyle = '#b5773c';
+  for (let x = 170; x < 700; x += 26) for (let y = 60; y < 210; y += 26) { g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill(); }
+  wrench(g, 210, 70, 0, 1); wrench(g, 270, 70, 0, 0.85, '#c9ccd2'); wrench(g, 320, 70, 0, 0.7);
+  hammer(g, 400, 80, 0, 1.1);
+  // отвёртки
+  for (const [x, c] of [[470, '#e8412c'], [510, '#2f7de1'], [550, '#ffc21a']]) {
+    g.fillStyle = c; roundRect(g, x - 9, 70, 18, 50, 6); g.fill();
+    g.fillStyle = '#9aa0aa'; g.fillRect(x - 3, 120, 6, 60);
+  }
+  // пила
+  g.fillStyle = '#c9ccd2'; g.beginPath(); g.moveTo(600, 80); g.lineTo(690, 80); g.lineTo(690, 110); g.lineTo(600, 130); g.closePath(); g.fill();
+  g.fillStyle = '#e8412c'; roundRect(g, 588, 74, 24, 50, 6); g.fill();
+  // полка со стопкой шин слева
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = '#26262b'; g.beginPath(); g.ellipse(70, 548 - i * 30, 56, 16, 0, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#4a4a52'; g.beginPath(); g.ellipse(70, 544 - i * 30, 26, 7, 0, 0, Math.PI * 2); g.fill();
+  }
+  // пол
+  g.fillStyle = '#9aa5b1'; g.fillRect(0, 560, W, 208);
+  g.fillStyle = '#87929e'; g.fillRect(0, 560, W, 6);
+  g.fillStyle = '#ffcf3a';
+  for (let x = 30; x < W; x += 140) g.fillRect(x, 740, 80, 10);
+  g.fillStyle = 'rgba(60,60,70,0.18)'; g.beginPath(); g.ellipse(300, 700, 60, 10, 0, 0, Math.PI * 2); g.fill();
+}
+
+function drawFuel(g) {
+  sky(g, '#8fd6ff', '#e4f6ff', 520);
+  cloud(g, 560, 120, 0.8); cloud(g, 820, 80, 0.6);
+  hills(g, 470, '#a9dd8a', 18, 4);
+  // навес заправки
+  g.fillStyle = '#e8412c'; roundRect(g, 120, 150, 860, 46, 10); g.fill();
+  g.fillStyle = '#ffffff'; g.fillRect(120, 184, 860, 8);
+  g.fillStyle = '#c9ccd2';
+  for (const x of [150, 940]) { g.fillRect(x - 12, 196, 24, 380); }
+  g.fillStyle = '#fff3b0';
+  for (const x of [300, 520, 740]) { g.beginPath(); g.ellipse(x, 198, 40, 6, 0, 0, Math.PI * 2); g.fill(); }
+  // заправочная площадка
+  g.fillStyle = '#b8bec7'; g.fillRect(0, 560, W, 208);
+  g.fillStyle = '#a3aab4'; g.fillRect(0, 560, W, 6);
+  g.strokeStyle = '#a3aab4'; g.lineWidth = 3;
+  for (let x = 0; x < W; x += 128) { g.beginPath(); g.moveTo(x, 566); g.lineTo(x - 60, H); g.stroke(); }
+  // островок под колонку слева
+  g.fillStyle = '#7b7f87'; roundRect(g, 60, 640, 240, 30, 8); g.fill();
+  g.fillStyle = '#ffcf3a';
+  for (let x = 70; x < 290; x += 40) g.fillRect(x, 646, 20, 18);
+  g.fillStyle = '#ffffff';
+  for (let x = 380; x < W; x += 130) g.fillRect(x, 720, 70, 10);
+}
+
 export const art = {
   'bg/home': { w: W, h: H, draw: drawHome },
   'bg/assembly': { w: W, h: H, draw: drawAssembly },
   'bg/locked': { w: W, h: H, draw: drawLocked },
+  'bg/garage': { w: W, h: H, draw: drawGarage },
+  'bg/puzzle': { w: W, h: H, draw: drawPuzzle },
+  'bg/wash': { w: W, h: H, draw: drawWash },
+  'bg/repair': { w: W, h: H, draw: drawRepair },
+  'bg/fuel': { w: W, h: H, draw: drawFuel },
 };

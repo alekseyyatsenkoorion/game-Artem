@@ -1,6 +1,7 @@
 // Самосвал: рисование деталей и поз. Координаты деталей — из src/data/machines/samosval.js.
 import samosval from '../../data/machines/samosval.js';
 import { roundRect } from '../../core/draw-utils.js';
+import { drawWheel, makeMachine } from '../parts-common.js';
 
 const RED = '#e8412c';
 const RED_DARK = '#b52b1b';
@@ -9,29 +10,6 @@ const YELLOW_DARK = '#d99a00';
 const STEEL = '#3b4250';
 const GLASS = '#9fdcff';
 const OUTLINE = '#2a2230';
-
-export function drawWheel(g, cx, cy, r) {
-  g.fillStyle = '#26262b';
-  g.beginPath(); g.arc(cx, cy, r, 0, Math.PI * 2); g.fill();
-  // протектор
-  g.fillStyle = '#3d3d44';
-  for (let i = 0; i < 12; i++) {
-    const a = (i / 12) * Math.PI * 2;
-    g.save(); g.translate(cx + Math.cos(a) * (r - 4), cy + Math.sin(a) * (r - 4)); g.rotate(a);
-    g.fillRect(-4, -7, 8, 14); g.restore();
-  }
-  g.fillStyle = '#c9ccd2';
-  g.beginPath(); g.arc(cx, cy, r * 0.52, 0, Math.PI * 2); g.fill();
-  g.strokeStyle = '#8d929c'; g.lineWidth = 3;
-  g.beginPath(); g.arc(cx, cy, r * 0.52, 0, Math.PI * 2); g.stroke();
-  g.fillStyle = '#6b707a';
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    g.beginPath(); g.arc(cx + Math.cos(a) * r * 0.3, cy + Math.sin(a) * r * 0.3, r * 0.07, 0, Math.PI * 2); g.fill();
-  }
-  g.fillStyle = '#4b4f57';
-  g.beginPath(); g.arc(cx, cy, r * 0.16, 0, Math.PI * 2); g.fill();
-}
 
 function drawKuzov(g, w, h) {
   g.lineJoin = 'round';
@@ -122,64 +100,26 @@ export const PART_DRAW = {
   'koleso-perednee': drawFront,
 };
 
-function drawPart(g, p, dx = 0, dy = 0) {
-  g.save();
-  g.translate(p.x + dx, p.y + dy);
-  PART_DRAW[p.id](g, p.w, p.h);
-  g.restore();
-}
-
-function sortedParts() {
-  return samosval.parts.slice().sort((a, b) => a.z - b.z);
-}
-
-export function drawWhole(g, opts = {}) {
-  for (const p of sortedParts()) {
-    if (opts.tilt && p.id === samosval.workPart) {
-      // кузов поднят: поворот вокруг заднего нижнего угла
-      g.save();
-      g.translate(p.x + 14, p.y + p.h - 4);
-      g.rotate(-opts.tilt);
-      g.translate(-(p.x + 14), -(p.y + p.h - 4));
-      drawPart(g, p);
-      g.restore();
-      continue;
-    }
-    drawPart(g, p);
-  }
-}
-
-function drawWork(g, w, h) {
+function drawWork(g, w, h, drawWhole) {
   // песок сыплется из поднятого кузова
   g.fillStyle = '#e9c46a';
   g.beginPath(); g.moveTo(6, 120); g.quadraticCurveTo(-4, 220, 10, h); g.lineTo(60, h); g.quadraticCurveTo(30, 220, 40, 130); g.closePath(); g.fill();
-  drawWhole(g, { tilt: 0.42 });
+  const tilt = 0.42;
+  drawWhole(g, {
+    special(g2, p) {
+      if (p.id !== samosval.workPart) return false;
+      // кузов поднят: поворот вокруг заднего нижнего угла
+      g2.save();
+      g2.translate(p.x + 14, p.y + p.h - 4); g2.rotate(-tilt); g2.translate(-(p.x + 14), -(p.y + p.h - 4));
+      g2.translate(p.x, p.y); PART_DRAW[p.id](g2, p.w, p.h);
+      g2.restore();
+      return true;
+    },
+  });
 }
 
-function drawDirty(g, w, h) {
-  drawWhole(g);
-  g.fillStyle = 'rgba(110, 72, 32, 0.75)';
-  const blobs = [[80, 100, 30], [200, 140, 24], [420, 150, 26], [300, 205, 20], [470, 60, 18], [120, 270, 22]];
-  for (const [x, y, r] of blobs) {
-    g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.arc(x + r * 0.8, y + r * 0.3, r * 0.6, 0, Math.PI * 2); g.fill();
-  }
-}
-
-function drawSilhouette(g, w, h) {
-  drawWhole(g);
-  g.globalCompositeOperation = 'source-in';
-  g.fillStyle = '#5a6b80';
-  g.fillRect(0, 0, w, h);
-  g.globalCompositeOperation = 'source-over';
-}
-
-const { w: W, h: H } = samosval.size;
-
-export const art = {};
-for (const p of samosval.parts) {
-  art['machine/samosval/part/' + p.id] = { w: p.w, h: p.h, draw: (g) => PART_DRAW[p.id](g, p.w, p.h) };
-}
-art['machine/samosval/whole/idle'] = { w: W, h: H, draw: (g) => drawWhole(g) };
-art['machine/samosval/whole/work'] = { w: W, h: H, draw: drawWork };
-art['machine/samosval/whole/dirty'] = { w: W, h: H, draw: drawDirty };
-art['machine/samosval/whole/silhouette'] = { w: W, h: H, draw: drawSilhouette };
+export const machine = makeMachine(samosval, PART_DRAW, {
+  work: drawWork,
+  blobs: [[80, 100, 30], [200, 140, 24], [420, 150, 26], [300, 205, 20], [470, 60, 18], [120, 270, 22]],
+});
+export const art = machine.art;

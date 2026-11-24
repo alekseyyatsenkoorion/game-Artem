@@ -1,6 +1,7 @@
-// Сцены зоны «Карта и стройка». На этапе 1 — главный экран, экран для взрослых и «Машины спят».
+// Сцены зоны «Карта и стройка»: главный экран, гараж, экран для взрослых, «Машины спят».
 import { HomeScene } from './home.js';
+import { GarageScene } from './garage.js';
 import { ParentScene } from './parent.js';
 import { LockedScene } from './locked.js';
 
-export const scenes = [HomeScene, ParentScene, LockedScene];
+export const scenes = [HomeScene, GarageScene, ParentScene, LockedScene];

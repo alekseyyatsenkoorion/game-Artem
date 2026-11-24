@@ -2,7 +2,6 @@
 // Открывается жестом: два пальца в верхних углах 3 секунды.
 import { Scene } from '../core/scene.js';
 import { roundRect } from '../core/draw-utils.js';
-import { VERSION } from '../core/version.js';
 
 const FONT = '-apple-system, "Helvetica Neue", Arial, sans-serif';
 const CONFIRM_TIME = 4;
@@ -86,6 +85,8 @@ export class ParentScene extends Scene {
 
   draw(g) {
     const { timer, audio } = this.ctx;
+    let version = '';
+    try { version = this.ctx.updater ? String(this.ctx.updater.version()) : ''; } catch (e) { version = ''; }
     g.fillStyle = '#f2f4f7';
     g.fillRect(0, 0, 1024, 768);
     g.textBaseline = 'middle';
@@ -118,7 +119,7 @@ export class ParentScene extends Scene {
     g.textAlign = 'left';
     g.font = '22px ' + FONT;
     g.fillStyle = '#5d6977';
-    g.fillText('Версия игры: ' + VERSION, 120, 676);
+    g.fillText('Версия игры: ' + version, 120, 676);
     g.fillText('Голос: ' + audio.voiceInfo(), 120, 710);
     g.fillText('Открыть этот экран: два пальца в верхних углах, 3 секунды.', 120, 744);
 
