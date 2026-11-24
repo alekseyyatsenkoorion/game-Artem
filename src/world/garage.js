@@ -3,6 +3,8 @@
 // собранные — целиком. Тык по собранной: она выезжает крупно, голос называет её и говорит факт,
 // вокруг три значка: собрать заново, пазл (16 и 25), помыть. Про конкретные машины здесь ничего нет:
 // всё из ctx.data.machines. Машины открывает стройка (Progress.completeObject), не гараж.
+// Факты гараж ведёт сам: по кругу по machine.facts, начиная с factWithPicture, чтобы в первый же
+// раз была картинка. Пока звучит этот факт (и ещё FACT_CARD_HOLD с), рядом с машиной карточка fact/<id>.
 // Режим выбора для каната: params {mode: 'tug'} — тык по открытой машине открывает канат с ней;
 // проигравшая машина едет на мойку, потом снова выбор.
 import { Scene } from '../core/scene.js';
@@ -39,6 +41,31 @@ const UNZOOM_TIME = 0.35;
 const ARRIVE_TIME = 1.6;
 const BIG_BOX = { x: 212, y: 112, w: 600, h: 400 }; // крупная машина
 const ICON = 120, ICON_GAP = 26, ICON_Y = 560;
+// Карточка с картинкой к факту: справа от крупной машины, машина отъезжает влево.
+export const FACT_CARD = { x: 612, y: 150, w: 392, h: 292 }; // картинка 360×260 + поля 16
+const FACT_PAD = 16;
+const BIG_BOX_CARD = { x: 20, y: 112, w: 572, h: 400 }; // крупная машина, пока видна карточка
+const FACT_CARD_HOLD = 2; // с после фразы
+const FACT_CARD_FADE = 0.35;
+const SHIFT_TIME = 0.4;
+
+// Очередь фактов: счётчик на уровне модуля, живёт, пока открыта игра.
+const factCounters = {};
+export function factOrder(m) {
+  const facts = (m && m.facts) || [];
+  const start = Math.max(0, facts.indexOf(m.factWithPicture));
+  return facts.slice(start).concat(facts.slice(0, start));
+}
+export function nextFact(m) {
+  const order = factOrder(m);
+  if (!order.length) return null;
+  const i = factCounters[m.id] || 0;
+  factCounters[m.id] = (i + 1) % order.length;
+  return order[i];
+}
+export function resetFacts() {
+  for (const k of Object.keys(factCounters)) delete factCounters[k];
+}
 
 function sortedMachines(list) {
   return (list || []).slice().sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -58,6 +85,7 @@ export class GarageScene extends Scene {
     for (const ic of ICONS) ids.push(ic.icon);
     for (const m of contentData.machines || []) {
       ids.push('machine/' + m.id + '/whole/idle', 'machine/' + m.id + '/whole/silhouette');
+      if (m.factWithPicture) ids.push('fact/' + m.id);
       for (const p of (m.parts || []).slice(0, PILE_PARTS)) ids.push('machine/' + m.id + '/part/' + p.id);
     }
     return ids;
@@ -77,6 +105,9 @@ export class GarageScene extends Scene {
     this.arrivals = {}; // id машины → время с начала приезда
     this.shake = {}; // id машины → оставшееся время покачивания
     this.bounce = 0;
+    this.card = null; // {machine, img, started, speaking, hold, a} — карточка к факту
+    this.cardToken = 0;
+    this.shift = 0; // 0..1 — насколько крупная машина отъехала влево под карточку
     this.hint = new IdleHint();
     this.dirty = false;
     this._layout();
@@ -122,6 +153,7 @@ export class GarageScene extends Scene {
     this.dirty = false;
     // Сброс прогресса с экрана взрослых: крупная машина больше не собрана — назад к ряду.
     if (this.selected && this._slot(this.selected).state !== 'ready') {
+      this._hideCard();
       this.selected = null;
       this.icons = [];
       this.mode = 'row';
@@ -181,7 +213,24 @@ export class GarageScene extends Scene {
   }
 
   _bigRect(id) {
-    return fit(this._machine(id).size, BIG_BOX, true);
+    const size = this._machine(id).size;
+    const a = fit(size, BIG_BOX, true);
+    if (this.shift <= 0) return a;
+    const b = fit(size, BIG_BOX_CARD, true);
+    const k = easeInOut(Math.min(1, this.shift));
+    return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k), w: lerp(a.w, b.w, k), h: lerp(a.h, b.h, k) };
+  }
+
+  // Карточка к факту (для тестов): {machine, img, rect, alpha} или null, если не видна.
+  factCard() {
+    const c = this.card;
+    if (!c || c.a <= 0) return null;
+    return { machine: c.machine, img: c.img, rect: Object.assign({}, FACT_CARD), alpha: c.a };
+  }
+
+  _hideCard() {
+    this.card = null;
+    this.cardToken++;
   }
 
   // Где сейчас рисуется выбранная машина (с учётом выезда).
@@ -204,17 +253,30 @@ export class GarageScene extends Scene {
     this.modeT = 0;
     this.icons = this._makeIcons(id);
     this.ctx.audio.play('horn/' + id);
-    this.ctx.audio.say(m.namePhrase);
-    this.ctx.audio.fact(id);
+    const audio = this.ctx.audio;
+    const named = audio.say(m.namePhrase);
+    const fact = nextFact(m);
+    this._hideCard();
+    if (!fact) return;
+    const spoken = audio.say(fact);
+    if (fact !== m.factWithPicture) return;
+    const token = this.cardToken;
+    const card = { machine: id, img: 'fact/' + id, started: false, speaking: true, hold: FACT_CARD_HOLD, a: 0 };
+    this.card = card;
+    // карточка появляется, когда имя договорено и начинается факт; держится, пока звучит факт
+    Promise.resolve(named).then(() => { if (this.cardToken === token) card.started = true; });
+    Promise.resolve(spoken).then(() => { if (this.cardToken === token) { card.started = true; card.speaking = false; } });
   }
 
   _unselect() {
+    this._hideCard();
     this.mode = 'unzoom';
     this.modeT = 0;
   }
 
   _open(scene, params, from) {
     if (!this._hasScene(scene)) return;
+    this._hideCard();
     this.pending = { scene, machine: params.machine, from };
     this.ctx.scenes.open(scene, params);
   }
@@ -306,6 +368,7 @@ export class GarageScene extends Scene {
       this.arrivals[k] += dt;
       if (this.arrivals[k] >= ARRIVE_TIME) delete this.arrivals[k];
     }
+    this._updateCard(dt);
     if (this.mode === 'zoom' && this.modeT >= ZOOM_TIME) { this.mode = 'big'; this.modeT = 0; }
     if (this.mode === 'unzoom' && this.modeT >= UNZOOM_TIME) {
       this.mode = 'row'; this.modeT = 0; this.selected = null; this.icons = [];
@@ -314,6 +377,24 @@ export class GarageScene extends Scene {
     if (!calm) return;
     if (this.ctx.timer.checkpoint()) return;
     if (this.hint.update(dt)) this.ctx.audio.say(this.tugMode ? 'tug-pick' : this.mode === 'big' ? 'garage-actions' : 'garage-hint');
+  }
+
+  _updateCard(dt) {
+    const c = this.card;
+    if (c && (this.mode === 'zoom' || this.mode === 'big')) {
+      if (!c.speaking) c.hold -= dt;
+      if (c.hold > 0) {
+        if (c.started && this.mode === 'big') c.a = Math.min(1, c.a + dt / FACT_CARD_FADE);
+      } else {
+        c.a = Math.max(0, c.a - dt / FACT_CARD_FADE);
+        if (c.a <= 0) this._hideCard();
+      }
+    } else if (c) {
+      this._hideCard();
+    }
+    const want = this.card ? 1 : 0;
+    if (this.shift < want) this.shift = Math.min(want, this.shift + dt / SHIFT_TIME);
+    else if (this.shift > want) this.shift = Math.max(want, this.shift - dt / SHIFT_TIME);
   }
 
   // ---------- рисование ----------
@@ -340,7 +421,7 @@ export class GarageScene extends Scene {
         for (const s of still) this._drawSlotMachine(g, s, 0);
         // под крупной машиной ряд затемнён — тоже один раз, а не каждый кадр
         if (dim) { g.fillStyle = 'rgba(20,30,45,' + DIM + ')'; g.fillRect(0, 0, 1024, 768); }
-        if (withIcons) { this._drawPodium(g, 1); this._drawIcons(g, true); }
+        if (withIcons) this._drawIcons(g, true);
       } } });
       this.layerKey = key;
     }
@@ -374,10 +455,11 @@ export class GarageScene extends Scene {
         g.fillRect(0, 0, 1024, 768);
       }
       const r = this.selectedRect();
-      if (!this.iconsBaked()) this._drawPodium(g, k);
+      this._drawPodium(g, k);
       const dy = this.bounce > 0 ? -Math.abs(Math.sin(this.bounce * 18)) * 14 : Math.sin(this.t * 2) * 2 * k;
       g.drawImage(a.image('machine/' + this.selected + '/whole/idle'), Math.round(r.x), Math.round(r.y + dy), Math.round(r.w), Math.round(r.h));
       if (this.mode === 'big' && !this.iconsBaked()) this._drawIcons(g, false);
+      this._drawFactCard(g);
     }
 
     if (this.hint.showHand()) {
@@ -458,6 +540,28 @@ export class GarageScene extends Scene {
     const r = this.selectedRect();
     g.fillStyle = 'rgba(255,255,255,' + (0.25 * k).toFixed(3) + ')';
     g.beginPath(); g.ellipse(r.x + r.w / 2, r.y + r.h + 4, r.w / 2 + 30, 26 * k + 6, 0, 0, Math.PI * 2); g.fill();
+  }
+
+  _drawFactCard(g) {
+    const c = this.card;
+    if (!c || c.a <= 0 || (this.mode !== 'big' && this.mode !== 'zoom')) return;
+    const k = easeOut(c.a);
+    const s = 0.85 + 0.15 * k;
+    const r = FACT_CARD;
+    const w = r.w * s, h = r.h * s, p = FACT_PAD * s;
+    const x = r.x + (r.w - w) / 2, y = r.y + (r.h - h) / 2;
+    g.save();
+    g.globalAlpha = k;
+    g.shadowColor = 'rgba(0,0,0,0.35)';
+    g.shadowBlur = 18;
+    g.shadowOffsetY = 6;
+    g.fillStyle = '#ffffff';
+    roundRect(g, x, y, w, h, 24 * s); g.fill();
+    g.shadowColor = 'rgba(0,0,0,0)';
+    g.shadowBlur = 0;
+    g.shadowOffsetY = 0;
+    g.drawImage(this.ctx.assets.image(c.img), x + p, y + p, w - 2 * p, h - 2 * p);
+    g.restore();
   }
 
   _drawIcons(g, still) {

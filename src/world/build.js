@@ -12,6 +12,7 @@ import { IdleHint, drawHand } from '../core/ui.js';
 import { logError, clamp, easeInOut, easeOut } from '../core/draw-utils.js';
 import { makeAction, ACTIONS, facesBack } from './build-actions/index.js';
 import { GROUND, SITE } from './build-actions/common.js';
+import { opaqueBox, screenBox } from './build-actions/layer-box.js';
 import contentData from '../data/index.js';
 
 export const OBJECT_ORIGIN = { x: 400, y: GROUND - 340 };
@@ -62,6 +63,7 @@ export class BuildScene extends Scene {
     this.hint = new IdleHint();
     this.sparkles = [];
     this.confetti = [];
+    this.boxes = new Map(); // id слоя → где он на экране (или null)
     if (!def || !Array.isArray(def.steps) || !def.steps.length || def.steps.some((s) => !s || !ACTIONS[s.action])) {
       logError('build', 'нет описания объекта или в нём ошибка', id);
       ctx.scenes.back();
@@ -125,6 +127,19 @@ export class BuildScene extends Scene {
     return s && !this.onSite(i) ? this._machineDef(s.machine) : null;
   }
 
+  // Где на экране появится слой шага i: прямоугольник его непрозрачных пикселей (один раз на слой) или null.
+  layerBox(i) {
+    const s = this.steps && this.steps[i];
+    if (!s || !s.layer) return null;
+    const id = layerId(this.objectId, s.layer);
+    if (!this.boxes.has(id)) {
+      let b = null;
+      try { b = screenBox(opaqueBox(this.ctx.assets.image(id), LAYER.w, LAYER.h), OBJECT_ORIGIN); } catch (e) { b = null; }
+      this.boxes.set(id, b);
+    }
+    return this.boxes.get(id);
+  }
+
   // Что сейчас ждём от ребёнка (для e2e и руки-подсказки).
   get target() {
     if (this.phase !== 'work' || !this.action) return null;
@@ -162,6 +177,7 @@ export class BuildScene extends Scene {
       machine: m,
       mirror,
       onSite,
+      box: this.layerBox(this.stepIndex), // куда ляжет новая часть (null — общее место)
       homeRect: () => machineHome(m),
       drawMachine: (g, r, pose) => this._drawMachine(g, m, r, pose, mirror),
       time: () => this.t,

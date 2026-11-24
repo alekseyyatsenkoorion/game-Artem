@@ -18,7 +18,7 @@ export default {
   wheels: [], // гусеницы не накачивают: ремонт «колесо» этой машине не выпадает
   fuelPoint: { x: 110, y: 200 },
   tug: 'easy',
-  // Черновик: проверенные факты готовятся на этапе 3 и показываются Alex до озвучки.
+  // Факты проверены и утверждены Alex 24.11.2026.
   facts: ['fact-buldozer-1', 'fact-buldozer-2', 'fact-buldozer-3', 'fact-buldozer-4'],
   factWithPicture: 'fact-buldozer-1',
   puzzles: {

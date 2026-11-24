@@ -8,7 +8,8 @@ export class LevelAction extends TraceAction {
     const front = m ? m.x + m.w - 30 : this.pointAt(this.pos).x;
     if (this.done) return;
     g.fillStyle = '#9b6b45';
-    for (let x = 450; x <= 980; x += 88) {
+    const a = this.area();
+    for (let x = a.x0 + 10; x <= a.x1 + 20; x += 88) {
       if (x < front) continue;
       g.beginPath(); g.ellipse(x, GROUND, 40, 22, 0, Math.PI, 0); g.fill();
     }

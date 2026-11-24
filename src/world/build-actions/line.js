@@ -1,10 +1,17 @@
 // line — вести пальцем по пунктиру: разметка остаётся белыми штрихами.
-import { TraceAction, GROUND, densify } from './common.js';
+import { TraceAction, GROUND, densify, clamp } from './common.js';
 
 const Y = GROUND - 8;
 
 export class LineAction extends TraceAction {
-  makePath() { return densify([{ x: 440, y: Y }, { x: 970, y: Y }], 50); }
+  // Разметка идёт по самой «заполненной» строке новой части (env.box.row) от края до края; иначе по земле.
+  makePath() {
+    const b = this.env.box;
+    if (!b) { this.y = Y; return densify([{ x: 440, y: Y }, { x: 970, y: Y }], 50); }
+    const a = this.area();
+    this.y = Math.round(clamp(b.row, 140, 720));
+    return densify([{ x: Math.max(a.x0, 140), y: this.y }, { x: Math.min(a.x1, 990), y: this.y }], 50);
+  }
   movingRect() { return null; }
   backTime() { return 0.5; }
   onStep() { this.play('fx/snap'); }
@@ -12,7 +19,7 @@ export class LineAction extends TraceAction {
     if (this.done || this.pos <= 0) return;
     const p = this.pointAt(this.pos);
     g.fillStyle = '#ffffff';
-    for (let x = this.path[0].x; x < p.x; x += 50) g.fillRect(x, Y - 5, Math.min(30, p.x - x), 10);
+    for (let x = this.path[0].x; x < p.x; x += 50) g.fillRect(x, this.y - 5, Math.min(30, p.x - x), 10);
   }
   draw(g) {
     const r = this.homeRect();

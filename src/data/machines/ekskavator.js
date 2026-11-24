@@ -19,7 +19,7 @@ export default {
   wheels: [], // гусеницы не накачивают: ремонт «колесо» этой машине не выпадает
   fuelPoint: { x: 90, y: 250 },
   tug: 'medium',
-  // Черновик: проверенные факты готовятся на этапе 3 и показываются Alex до озвучки.
+  // Факты проверены и утверждены Alex 24.11.2026.
   facts: ['fact-ekskavator-1', 'fact-ekskavator-2', 'fact-ekskavator-3', 'fact-ekskavator-4', 'fact-ekskavator-5'],
   factWithPicture: 'fact-ekskavator-1',
   puzzles: {

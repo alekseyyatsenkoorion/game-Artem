@@ -7,7 +7,12 @@ export class StackAction extends DragAction {
     if (r) return { x: Math.round(r.x + r.w / 2), y: Math.round(r.y - 50) };
     return { x: 220, y: 552 };
   }
-  spot(i) { return { x: 700, y: 574 - i * 46 }; }
+  fallbackSpot(i) { return { x: 700, y: 574 - i * 46 }; }
+  // ряды снизу вверх; если рядам тесно (низкая длинная часть: перила, секции) — секции слева направо
+  splitAxis() {
+    const b = this.env.box;
+    return b && b.h / this.repeats >= 20 ? 'y' : 'x';
+  }
   itemSize() { return { w: 160, h: 44 }; }
   drawItem(g, x, y, alpha = 1) {
     const s = this.itemSize();

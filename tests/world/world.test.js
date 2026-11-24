@@ -270,7 +270,7 @@ test('3.2 гараж: тык по каждой собранной машине �
     // имя договорено — следом факт
     w.voices.finishCurrent();
     await tick(); await tick();
-    assert.ok(m.facts.map((f) => FX.data.phrases[f]).includes(w.voices.log[1]), 'факт: ' + w.voices.log[1]);
+    assert.ok(m.facts.map((f) => FX.data.phrases[f].replace('{name}', FX.data.childName)).includes(w.voices.log[1]), 'факт: ' + w.voices.log[1]);
     w.audio.clearVoice();
     w.voices.pending.length = 0; // снятые фразы подмена голоса не убирает сама
     // тык мимо машины и значков — назад к ряду

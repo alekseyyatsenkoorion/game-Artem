@@ -2,7 +2,7 @@
 // Новая версия скачивается в фоне целиком и включается при следующем запуске.
 // Блок между метками заполняет tools/build.mjs при выкладке — руками не правится.
 // BUILD:START
-const VERSION = "1.3";
+const VERSION = "1.4";
 const FILES = [
   "assets/gpt/manifest.json",
   "icon-180.png",
@@ -10,6 +10,7 @@ const FILES = [
   "icon-512.png",
   "index.html",
   "manifest.webmanifest",
+  "src/art/animals.js",
   "src/art/backgrounds.js",
   "src/art/index.js",
   "src/art/machines/avtokran.js",
@@ -91,6 +92,7 @@ const FILES = [
   "src/world/build-actions/haul-away.js",
   "src/world/build-actions/haul-in.js",
   "src/world/build-actions/index.js",
+  "src/world/build-actions/layer-box.js",
   "src/world/build-actions/level.js",
   "src/world/build-actions/lift.js",
   "src/world/build-actions/line.js",

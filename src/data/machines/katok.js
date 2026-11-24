@@ -18,7 +18,7 @@ export default {
   wheels: ['koleso-zadnee'],
   fuelPoint: { x: 240, y: 175 },
   tug: 'medium',
-  // Черновик: проверенные факты готовятся на этапе 3 и показываются Alex до озвучки.
+  // Факты проверены и утверждены Alex 24.11.2026.
   facts: ['fact-katok-1', 'fact-katok-2', 'fact-katok-3', 'fact-katok-4'],
   factWithPicture: 'fact-katok-1',
   puzzles: {

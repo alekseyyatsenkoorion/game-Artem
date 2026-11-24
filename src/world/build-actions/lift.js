@@ -5,7 +5,7 @@ const TIP_Y = 130;
 
 export class LiftAction extends DragAction {
   source() { return { x: 330, y: 300 }; }
-  spot(i) {
+  fallbackSpot(i) {
     const n = this.repeats;
     return { x: Math.round(520 + (i + 0.5) * 380 / n), y: 440 };
   }
